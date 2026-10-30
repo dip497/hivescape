@@ -41,6 +41,8 @@ importers:
 
   packages/runtime: {}
 
+  scenes/apiary: {}
+
   scenes/campfire: {}
 
   scenes/koi: {}

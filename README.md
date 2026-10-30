@@ -23,10 +23,17 @@ A click sends a swell through the cells and lifts them as it passes.
 | ![Campfire at night, the firs lit by the fire on the side facing it](docs/images/campfire-dark.webp) | ![Campfire at dusk](docs/images/campfire-light.webp) |
 | ![Koi Pond by day](docs/images/koi-light.webp) | ![Close-up: stones and flames as glossy hexagonal cells, lit by the fire](docs/images/campfire-close.webp) |
 
+And a scene that wants plain illustration has it: Apiary is isometric 2.5D in the `native` style,
+its terraces, cottage and hives drawn at full resolution and lit the same way.
+
+| Apiary by day | Apiary by night |
+|---|---|
+| ![Apiary: an isometric island with terraces, a cottage, hives and flower patches](docs/images/apiary-light.webp) | ![Apiary at night: the cottage window and the lamp light the island](docs/images/apiary-dark.webp) |
+
 ## What a scene can be
 
 - **Any view.** Top-down (Koi Pond), side-on in layers that part as the pointer moves (Campfire),
-  or isometric. `isometric()` maps ground tiles and heights to the screen and back, so the pointer
+  or isometric (Apiary). `isometric()` maps ground tiles and heights to the screen and back, so the pointer
   lands on the tile under it. `parallax()` shifts a side view's layers by their distance.
 - **Any style.** The same scene can be shown as:
 
@@ -103,6 +110,16 @@ hive plugins install out/hivemind    # the app offers it as your background
 a worker; its manifest; a preview picture; and the licences. `@hivescape/hivemind` connects a scene
 to the app. It passes on the size, the look (dark or light, and the app's colours), run, hold or
 still, and the pointer and clicks over open canvas.
+
+## Skills for agents
+
+`skills/` holds three skills (linked into `.claude/skills` for Claude Code); any agent can read them:
+
+| Skill | Teaches |
+|---|---|
+| `hivescape-scene` | Designing and writing a scene that is its own, top-down, side-on or isometric. |
+| `hivescape-review` | The quality bar: contact sheets, what to look for, the cost budget, the tests. |
+| `hivescape-hivemind` | Packing scenes as Hivemind wallpapers, checking, installing and publishing them. |
 
 ## Packages
 

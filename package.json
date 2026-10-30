@@ -9,7 +9,7 @@
     "test": "bun test packages scenes",
     "hivescape": "node packages/cli/bin/hivescape.mjs",
     "dev": "node packages/cli/bin/hivescape.mjs dev scenes/koi",
-    "shots": "node packages/cli/bin/hivescape.mjs shot scenes/koi && node packages/cli/bin/hivescape.mjs shot scenes/campfire",
+    "shots": "node packages/cli/bin/hivescape.mjs shot scenes/koi && node packages/cli/bin/hivescape.mjs shot scenes/campfire && node packages/cli/bin/hivescape.mjs shot scenes/apiary",
     "bench": "node packages/cli/bin/hivescape.mjs bench scenes/koi"
   },
   "devDependencies": {

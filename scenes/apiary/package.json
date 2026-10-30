@@ -1,0 +1,9 @@
+{
+  "name": "@hivescape/scene-apiary",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "An isometric island apiary: bees work the flowers between their hives; by night the cottage windows and the lamp light the paths.",
+  "exports": { ".": "./src/index.ts" },
+  "hivescape": { "name": "Apiary", "description": "An isometric island apiary: bees work the flowers between their hives; click a tile to plant flowers." }
+}

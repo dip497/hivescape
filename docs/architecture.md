@@ -42,6 +42,7 @@ painted, so a view is a helper, not a mode:
   the pointer, so the layers part.
 - **Isometric**: `isometric({ tile, ratio, origin })` maps ground `x, y` and height `z` to the
   screen (`toScreen`) and back (`toGround`, for the pointer). `depth()` gives the painter's order.
+  Apiary finds the tile under the pointer by trying each terrace height, highest first.
 
 ## Styles
 

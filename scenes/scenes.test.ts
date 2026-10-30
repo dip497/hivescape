@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { LIGHT, simulate } from "@hivescape/core";
 import koi from "./koi/src/index.ts";
 import campfire from "./campfire/src/index.ts";
+import apiary, { viewOf } from "./apiary/src/index.ts";
 
 type KoiState = ReturnType<typeof koi.create>;
 type CampState = ReturnType<typeof campfire.create>;
@@ -58,5 +59,35 @@ describe("Campfire", () => {
     for (let m = 0; m < 60; m++) { for (let c = 0; c < 5; c++) sim.click(720, 600); sim.run(60); }
     expect((sim.state as CampState).sparks.length).toBeLessThanOrEqual(220);
     expect((sim.state as CampState).logs).toBeLessThanOrEqual(6);
+  });
+});
+
+describe("Apiary", () => {
+  type IsleState = ReturnType<typeof apiary.create>;
+  test("the tile under the pointer is the one it is over, on every terrace, and a click plants flowers there", () => {
+    const sim = simulate(apiary, { seed: 2 });
+    const s = sim.state as IsleState, iso = viewOf(sim.world);
+    // One tile of each height, pointed at in the middle of its top.
+    const byHeight = new Map<number, (typeof s.tiles extends Map<string, infer T> ? T : never)>();
+    for (const t of s.tiles.values()) if (!byHeight.has(t.z)) byHeight.set(t.z, t);
+    expect(byHeight.size).toBeGreaterThanOrEqual(3);
+    for (const t of byHeight.values()) {
+      const p = iso.toScreen(t.x + 0.5, t.y + 0.5, t.z);
+      sim.point(p.x, p.y); sim.run(1 / 60);
+      expect(s.hover).toBe(t);
+    }
+    const t = [...byHeight.values()].at(-1)!, p = iso.toScreen(t.x + 0.5, t.y + 0.5, t.z), before = s.patches.length;
+    sim.click(p.x, p.y); sim.run(1 / 60);
+    expect(s.patches.length).toBe(before + 1);
+    expect(s.patches.at(-1)).toMatchObject({ x: t.x, y: t.y });
+  });
+  test("a click on the sea plants nothing, and the patches stay bounded", () => {
+    const sim = simulate(apiary, { seed: 2 });
+    const s = sim.state as IsleState, before = s.patches.length;
+    sim.click(5, 5); sim.run(1 / 60);
+    expect(s.patches.length).toBe(before);
+    const iso = viewOf(sim.world), t = [...s.tiles.values()][0]!, p = iso.toScreen(t.x + 0.5, t.y + 0.5, t.z);
+    for (let i = 0; i < 100; i++) { sim.click(p.x, p.y); sim.run(0.1); }
+    expect(s.patches.length).toBeLessThanOrEqual(16);
   });
 });
