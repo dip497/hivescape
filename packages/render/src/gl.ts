@@ -10,12 +10,14 @@
  */
 import { ATLAS_COLS, ATLAS_ROWS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
+import { CUT } from "./ascii.js";
 import { KEY, type FrameInput } from "./frame.js";
 import { LS, SS, type AnyCanvas } from "./surface.js";
 
 const MAX_RIPPLES = 8;
 const MAX_RAMP = 16;
-const KIND = { comb: 0, glyph: 1, pixel: 2, native: 3 } as const;
+const KIND = { comb: 0, ascii: 1, pixel: 2, native: 3 } as const;
+const EDGES = 12;
 
 const HASH = /* glsl */ `
 float cellHash(int i, int j, int tick) {
@@ -92,6 +94,8 @@ uniform int uRipN;
 uniform float uTime;
 uniform float uRamp[${MAX_RAMP}];
 uniform float uRampLen;
+uniform float uEdge[${EDGES}];
+uniform vec4 uLook;
 out vec2 vP;
 out vec2 vWorld;
 flat out vec2 vHalf;
@@ -101,9 +105,25 @@ flat out float vHeight;
 flat out float vBlur;
 flat out float vEmit;
 flat out float vSlot;
+flat out float vBody;
 const vec2 Q[6] = vec2[6](vec2(-1,-1), vec2(1,-1), vec2(-1,1), vec2(-1,1), vec2(1,-1), vec2(1,1));
 const vec3 KEY = vec3(${KEY.map((v) => v.toFixed(5)).join(", ")});
+const float PI = 3.14159265;
 ${HASH}
+// ascii.ts's edgeGlyph: the edge character for a partly covered cell of this shape.
+int edgeGlyph(float cov, float cx, float cy, float aniso, float ang, float len) {
+  if (aniso > 0.55 && cov < 0.5 && len > 0.5) {
+    float a = mod(ang, PI);
+    if (a < PI / 8.0 || a > 7.0 * PI / 8.0) return cy > 0.68 ? 2 : 5;
+    if (a > 3.0 * PI / 8.0 && a < 5.0 * PI / 8.0) return cx > 0.62 ? 10 : (cx < 0.38 ? 11 : 7);
+    return a < PI / 2.0 ? 9 : 8;
+  }
+  if (cy > 0.66) return cov < 0.22 ? 0 : 1;
+  if (cy < 0.34) return cov < 0.22 ? 3 : 4;
+  if (cx > 0.64) return 10;
+  if (cx < 0.36) return 11;
+  return cov < 0.3 ? 5 : 6;
+}
 void main() {
   int cols = uGrid.x;
   int i = gl_InstanceID % cols, j = gl_InstanceID / cols;
@@ -122,23 +142,44 @@ void main() {
     float d = distance(centre, uRip[k].xy);
     ring = max(ring, max(0.0, 1.0 - abs(d - age * uRip2[k].x) / 28.0) * (1.0 - age / uRip[k].w) * uRip2[k].y);
   }
-  vSlot = -1.0; vEmit = 0.0; vBlur = 0.0;
+  vSlot = -1.0; vEmit = 0.0; vBlur = 0.0; vBody = 0.0;
   float size = 0.0;
   if (a >= uTile.y) size = a >= uTile.x ? 1.0 : 0.38 + 0.62 * sqrt((a - uTile.y) / max(uTile.x - uTile.y, 1e-3));
   if (size <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float height = uSurf.x * size + ring * 1.1;
   if (uLit == 1) vEmit = smoothstep(0.78, 1.0, dot(textureLod(uLight, centre / uSpan, 0.0).rgb, vec3(0.299, 0.587, 0.114)));
   vec2 half_;
+  float alpha = uKind == 2 && a < uTile.x ? a : 1.0;
+  vec2 offset = vec2(0.0);
   if (uKind == 1) {
-    float cov = clamp((a - uTile.y) / max(uTile.x - uTile.y, 1e-3), 0.0, 1.0);
-    float l = dot(c, vec3(0.299, 0.587, 0.114));
-    float top = uRampLen - 1.0;
-    float flick = cellHash(i, j, int(floor(uTime * uSurf.y)));
-    int ri = int(clamp(floor(cov * top * 0.6 + l * top * 0.4 + (flick - 0.5) * 1.2), 1.0, top));
-    vSlot = uRamp[ri];
-    size = 1.0 + ring * 0.25;
-    half_ = uCell * 0.5 * size;
+    // ascii: read the cell as a shape from its samples (kernel.ts's cellShapes), then pick its character.
+    float sw = 0.0, sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0;
+    ivec2 b0 = ivec2(i, j) * ${SS};
+    for (int v = 0; v < ${SS}; v++) for (int u = 0; u < ${SS}; u++) {
+      float w = texelFetch(uPic, b0 + ivec2(u, v), 0).a;
+      float x = (float(u) + 0.5) / ${SS}.0 * uCell.x, y = (float(v) + 0.5) / ${SS}.0 * uCell.y;
+      sw += w; sx += w * x; sy += w * y; sxx += w * x * x; syy += w * y * y; sxy += w * x * y;
+    }
+    float mx = sx / sw, my = sy / sw;
+    float va = sxx / sw - mx * mx, vb = syy / sw - my * my, vc = sxy / sw - mx * my;
+    float aniso = va + vb > 1e-6 ? sqrt((va - vb) * (va - vb) + 4.0 * vc * vc) / (va + vb) : 0.0;
+    float major = (va + vb) * 0.5 + sqrt((va - vb) * (va - vb) * 0.25 + vc * vc);
+    float len = sqrt(12.0 * major) / max(uCell.x, uCell.y);
+    if (a >= uTile.x) {
+      // A body: a block, with a character cut in it, sparse on bright skin and dense in shadow.
+      float lit = dot(c, vec3(0.299, 0.587, 0.114)) * uLook.x;
+      if (uLit == 1) lit += dot(c * textureLod(uLight, centre / uSpan, 1.0).rgb, vec3(0.299, 0.587, 0.114)) * 1.7;
+      float flick = uSurf.y > 0.0 ? (cellHash(i, j, int(floor(uTime * uSurf.y))) - 0.5) * 0.12 : 0.0;
+      int ri = int(clamp(floor((1.0 - clamp(lit + flick, 0.0, 1.0)) * uRampLen + (cellHash(i, j, 0) - 0.5) * 0.8), 0.0, uRampLen - 1.0));
+      vSlot = uRamp[ri]; vBody = 1.0;
+    } else {
+      vSlot = uEdge[edgeGlyph(a, mx / uCell.x, my / uCell.y, aniso, 0.5 * atan(2.0 * vc, va - vb), len)];
+      alpha = clamp(0.5 + a, 0.0, 1.0);
+    }
+    half_ = max((uCell - uTile.z) * 0.5, vec2(0.5));
     height = 0.0;
+    // A swell lifts the characters it passes, a row at its crest.
+    offset = vec2(0.0, -ring * uCell.y * 0.4);
   } else if (uHex == 1) {
     float ap = max((uCell.x - uTile.z) * 0.5, 0.5);
     half_ = vec2(ap, ap * 1.1547005) * size * (1.0 + ring * 0.08);
@@ -146,9 +187,8 @@ void main() {
     half_ = max((uCell - uTile.z) * 0.5, vec2(0.5)) * size * (1.0 + ring * 0.08);
   }
   // As a cell rises it moves toward the key light, and its shadow lengthens away from it.
-  vec2 lift = KEY.xy * ring * uCell.y * 0.16;
-  vec2 offset = lift;
-  vec2 pad = vec2(1.0);
+  if (uKind != 1) offset = KEY.xy * ring * uCell.y * 0.16;
+  vec2 pad = uKind == 1 ? uCell * 0.5 - half_ + 1.0 : vec2(1.0);
   if (uPass == 0) {
     if (uKind == 1 || uShadow.a <= 0.0 || height <= 0.01 || vEmit > 0.6) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
     offset = -KEY.xy * uCell.y * (0.1 + 0.26 * height);
@@ -160,7 +200,7 @@ void main() {
   gl_Position = vec4(pos / uView * 2.0 - 1.0, 0.0, 1.0);
   gl_Position.y = -gl_Position.y;
   vP = p; vWorld = pos; vHalf = half_;
-  vFill = c; vAlpha = uKind == 1 ? clamp(a * 1.6, 0.0, 1.0) : (uKind == 2 && a < uTile.x ? a : 1.0);
+  vFill = c; vAlpha = alpha;
   vHeight = height;
 }`;
 
@@ -174,6 +214,7 @@ uniform int uKind;
 uniform int uPass;
 uniform vec4 uTile;
 uniform vec4 uShadow;
+uniform int uDark;
 ${LIGHTING}
 in vec2 vP;
 in vec2 vWorld;
@@ -184,6 +225,7 @@ flat in float vHeight;
 flat in float vBlur;
 flat in float vEmit;
 flat in float vSlot;
+flat in float vBody;
 out vec4 o;
 // A pointy-topped hexagon of apothem \`r\` (centre to a flat side), corners rounded by \`k\`.
 float sdHex(vec2 p, float r, float k) {
@@ -203,14 +245,24 @@ float sd(vec2 p) {
 }
 void main() {
   if (uKind == 1) {
-    // A character, lit flat: the picture's colour under the scene's lights and the torch.
-    vec2 local = vP / (vHalf * 2.0) + 0.5;
-    vec2 slot = vec2(mod(vSlot, ${ATLAS_COLS}.0), floor(vSlot / ${ATLAS_COLS}.0));
-    float g = texture(uAtlas, (slot + clamp(local, 0.0, 1.0)) / vec2(${ATLAS_COLS}.0, ${ATLAS_ROWS}.0)).a * vAlpha;
-    if (g < 0.002) discard;
+    // ascii, lit flat: the picture's colour under the scene's lights and the torch.
     vec3 col = shade(vFill, vec3(0.0, 0.0, 1.0), vWorld, 0.0);
     col = mix(col, vFill * 1.15 + lightAt(vWorld, 0.0) * 0.3, vEmit);
-    o = vec4(col * g, g);
+    vec2 slot = vec2(mod(vSlot, ${ATLAS_COLS}.0), floor(vSlot / ${ATLAS_COLS}.0));
+    float g = texture(uAtlas, (slot + clamp(vP / uCell + 0.5, 0.0, 1.0)) / vec2(${ATLAS_COLS}.0, ${ATLAS_ROWS}.0)).a;
+    if (vBody > 0.5) {
+      // The block, with a seam round it, and its character cut darker into it.
+      float cov = clamp(0.5 - sdBox(vP, vHalf, 0.0) * uDpr, 0.0, 1.0);
+      if (cov < 0.002) discard;
+      vec3 c = mix(col, col * (uDark == 1 ? ${CUT.dark} : ${CUT.light}), g * 0.92);
+      o = vec4(c * cov, cov);
+    } else {
+      // An edge: the character alone, a little lighter on a dark page so it reads.
+      float a = g * vAlpha;
+      if (a < 0.002) discard;
+      vec3 c = uDark == 1 ? mix(col, vec3(1.0), 0.12) : col * 0.85;
+      o = vec4(c * a, a);
+    }
     return;
   }
   float d = sd(vP);
@@ -396,6 +448,7 @@ export class GLBackend implements Backend {
   private ripA = new Float32Array(MAX_RIPPLES * 4);
   private ripB = new Float32Array(MAX_RIPPLES * 2);
   private ramp = new Float32Array(MAX_RAMP);
+  private edges = new Float32Array(EDGES);
   private lost = false;
 
   /** Throws when WebGL2 is not to be had, or (unless `allowSoftware`) only in software. */
@@ -535,8 +588,11 @@ export class GLBackend implements Backend {
       for (let k = 0; k < rampLen; k++) this.ramp[k] = f.ramp[k]!;
       gl.uniform1fv(u.uRamp!, this.ramp);
       gl.uniform1f(u.uRampLen!, Math.max(1, rampLen));
+      for (let k = 0; k < EDGES; k++) this.edges[k] = f.edges[k] ?? 0;
+      gl.uniform1fv(u.uEdge!, this.edges);
+      gl.uniform1i(u.uDark!, f.look.dark ? 1 : 0);
       const count = grid.cols * grid.rows;
-      if (sh && style.relief > 0 && style.kind !== "glyph") { gl.uniform1i(u.uPass!, 0); gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count); }
+      if (sh && style.relief > 0 && style.kind !== "ascii") { gl.uniform1i(u.uPass!, 0); gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count); }
       gl.uniform1i(u.uPass!, 1);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
     }

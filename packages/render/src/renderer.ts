@@ -5,6 +5,7 @@
  * lights every frame, and keeps its own time for each, so a calm scene costs a calm amount.
  */
 import type { Look, Overlay, Rgb, Scene, Size, StyleSpec, World } from "@hivescape/core";
+import { ASCII_EDGES } from "./ascii.js";
 import { Atlas } from "./atlas.js";
 import type { Backend, BackendChoice } from "./backend.js";
 import { Canvas2DBackend } from "./c2d.js";
@@ -43,6 +44,7 @@ export class Renderer {
   private size: Size = { w: 1, h: 1, dpr: 1 };
   private style!: StyleSpec;
   private ramp: number[] = [];
+  private edges: number[] = [];
   private backdropAt = -Infinity;
   private backdropDirty = true;
   readonly stats: FrameStats = { ms: 0, backdropDrawn: false };
@@ -91,8 +93,9 @@ export class Renderer {
     if (this.layers.backdrop.width !== bw) this.layers.backdrop.width = bw;
     if (this.layers.backdrop.height !== bh) this.layers.backdrop.height = bh;
     this.backend.resize(size.w, size.h, size.dpr);
-    this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "glyph" ? 0.78 : 0.6);
+    this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "ascii" ? 0.82 : 0.6);
     this.ramp = this.atlas.slots(style.ramp || " ");
+    this.edges = this.atlas.slots(ASCII_EDGES);
     this.backdropDirty = true;
   }
 
@@ -140,7 +143,7 @@ export class Renderer {
     const p = world.input.pointer;
     this.backend.draw({
       picture: this.picture, grid: this.grid, style: this.style, look: world.look, time: world.time,
-      pointer: { x: p.x, y: p.y, active: p.active }, ripples: world.effects.ripples, ramp: this.ramp, overlay: this.overlay, light,
+      pointer: { x: p.x, y: p.y, active: p.active }, ripples: world.effects.ripples, ramp: this.ramp, edges: this.edges, overlay: this.overlay, light,
     }, this.atlas);
     this.stats.ms = performance.now() - t0;
     void w; void h;

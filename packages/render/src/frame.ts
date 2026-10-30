@@ -42,6 +42,8 @@ export interface FrameInput {
   ripples: readonly Ripple[];
   /** Atlas slots of the style's ramp, light to full. */
   ramp: readonly number[];
+  /** Atlas slots of the ascii style's edge characters (`ASCII_EDGES`), in order. */
+  edges: readonly number[];
   overlay: OverlayBatch;
   /** The scene's lights, `grid.cols * LS` by `grid.rows * LS` on black, or null when it paints none. */
   light: AnyCanvas | null;

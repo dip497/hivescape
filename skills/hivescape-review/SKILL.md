@@ -14,6 +14,11 @@ node packages/cli/bin/hivescape.mjs bench scenes/<id>
 pnpm typecheck && pnpm test
 ```
 
+Then put it **side by side with the best that came before**: the same subject in Hivemind's
+plugin wallpapers (`hivemind-plugins/packages/*/wallpapers/*/preview.webp`) or the scene's own last
+version, at the same size, in one picture. If the new one is not at least as good, it is not done,
+however new its technique.
+
 `shot` writes four moments in each look (running, the pointer resting, a click, after) and a
 contact sheet. Look at the sheet first, then crop to full size where the detail is (a creature, the
 light source) and look again.

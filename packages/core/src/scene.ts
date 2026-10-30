@@ -31,18 +31,20 @@ export interface Size {
 /**
  * - `comb`: a honeycomb of hexagonal cells in relief, lit by a key light, the scene's own lights and
  *   the pointer's torch. Hivescape's own look, and the default.
- * - `glyph`: characters alone, in the picture's colours and its light, over the backdrop.
+ * - `ascii`: character cells, as a terminal draws them. A body is a block of its colour with a
+ *   character cut into it; an edge is a light character alone, chosen by where the shape sits in
+ *   the cell (`. , _ ' " ( )`); a thin stroke is a line character along its direction (`- | / \`).
  * - `pixel`: square cells, flat or in relief.
  * - `native`: the picture at full resolution, lit and glowing: plain 2D (or 2.5D) illustration.
  */
-export type StyleKind = "comb" | "glyph" | "pixel" | "native";
+export type StyleKind = "comb" | "ascii" | "pixel" | "native";
 
 /** How the picture is shown. A scene suggests one; the host (or the person) may choose another. */
 export interface StyleSpec {
   kind: StyleKind;
   /** A cell's width and height, CSS pixels. A comb cell's height follows from its width (a regular hexagon). */
   cell: readonly [number, number];
-  /** Characters from light coverage to full, picked by each cell's coverage and lightness (glyph). */
+  /** The characters cut into a body's cells, from the brightest skin to the deepest shadow (ascii). */
   ramp: string;
   /** Corner radius of a cell, CSS pixels. */
   radius: number;
@@ -67,7 +69,7 @@ export interface StyleSpec {
   torch: number;
   /** How strongly the scene's lights glow over the ground, 0..1. */
   glow: number;
-  /** How often a character changes on its own, per second (glyph; 0 keeps them still). */
+  /** How often a body's character changes on its own, per second (ascii; 0 keeps them still). */
   flicker: number;
 }
 

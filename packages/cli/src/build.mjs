@@ -50,7 +50,7 @@ export async function buildHivemind(dir, opts = {}) {
   const { entry } = sceneEntry(dir);
   const worker = await buildWorker(dir, opts);
   return bundle(
-    `import scene from ${JSON.stringify(entry)};\nimport { runWallpaper } from "@hivescape/hivemind";\nawait runWallpaper(scene, { workerSource: __HIVESCAPE_WORKER__ });\n`,
+    `import scene from ${JSON.stringify(entry)};\nimport { runWallpaper } from "@hivescape/hivemind";\nawait runWallpaper(scene, { workerSource: __HIVESCAPE_WORKER__${opts.kind ? `, style: { kind: ${JSON.stringify(opts.kind)} }` : ""} });\n`,
     ROOT, { format: "esm", minify: opts.minify, external: ["@hivemind/view-sdk"], define: { __HIVESCAPE_WORKER__: JSON.stringify(worker) } },
   );
 }
@@ -65,7 +65,7 @@ body.bare #bar{display:none}</style>
 <div id="stage"></div>
 <div id="bar"><b>hivescape</b>
 <select id="look"><option>dark</option><option>light</option></select>
-<select id="kind"><option value="">scene's style</option><option>comb</option><option>glyph</option><option>pixel</option><option>native</option></select>
+<select id="kind"><option value="">scene's style</option><option>comb</option><option>ascii</option><option>pixel</option><option>native</option></select>
 <span id="info"></span></div>
 <script src="scene.js"></script>
 <script>

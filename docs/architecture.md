@@ -1,7 +1,7 @@
 # How Hivescape works
 
 A scene says what is there. Hivescape decides how it is shown. That split is the whole design: a
-scene written once can be a lit honeycomb, a glyph field, pixels or a plain illustration, and it
+scene written once can be a lit honeycomb, terminal-style ascii, pixels or a plain illustration, and it
 runs in a page, a worker or a Hivemind wallpaper without knowing which.
 
 ```
@@ -53,8 +53,15 @@ its tuning for its own kind.
 - **comb**: pointy-topped hexagons. A cell's row step is √3/2 of its width, so they are regular,
   and odd rows sit half a cell to the left. A partly covered cell is drawn smaller, its area
   following its coverage, so edges stay soft without blur.
-- **glyph**: a character a cell, chosen from the ramp by coverage and lightness, flickering
-  slowly.
+- **ascii**: cells as a terminal's, 9 × 13 px. Each cell is read as a shape from its 4 × 4
+  samples (`cellShapes`: coverage, where the covered part sits, how much it is a stroke, which
+  way and how long), and `ascii.ts` picks its character:
+  - a body cell is a block of its colour, with a 1 px seam, and a character cut darker into it
+    from the ramp (sparse on bright skin, dense in shadow, with a fixed per-cell grain);
+  - an edge cell is a light character alone, where the shape sits: `.` `,` low, `'` `"` high,
+    `(` `)` along a side, `-` `:` through the middle;
+  - a stroke through a cell is a line character along it: `-` `|` `/` `\` and `_` low.
+  A night scene's low ambient is lifted to at least 0.65 here, so characters still read.
 - **pixel**: square cells, with an optional bevel.
 - **native**: the picture itself at the screen's resolution, lit and glowing, with no cells.
 

@@ -1,6 +1,6 @@
 ---
 name: hivescape-scene
-description: Design and write a Hivescape scene that looks finished and is its own: choosing the view (top-down, side-on, isometric) and the style (comb, glyph, pixel, native), painting colour apart from light, using the light layer and the torch, motion and interaction, originality, and cost. Use when making a new scene, reworking one that looks flat or generic, or adding a view or a light to one.
+description: Design and write a Hivescape scene that looks finished and is its own: choosing the view (top-down, side-on, isometric) and the style (comb, ascii, pixel, native), painting colour apart from light, using the light layer and the torch, motion and interaction, originality, and cost. Use when making a new scene, reworking one that looks flat or generic, or adding a view or a light to one.
 ---
 
 # Writing a Hivescape scene
@@ -25,7 +25,11 @@ its ritual) and go further than the obvious version.
 | Things moving over a ground: water, a field, a board | top-down | `comb` |
 | A place with depth: a horizon, near and far, sky | side-on, layers with `parallax()` | `comb` |
 | A built world, terraces, objects with tops and sides | `isometric()` | `native` (cells lose the detail) |
-| Type, code, signal | any | `glyph` |
+| Anything meant to read as character art; type, code, signal | any | `ascii` |
+
+For `ascii`, paint thin things (grass, reeds, rigging) as strokes about 2 px wide, so they come out
+as `| / \ -`, and give flat areas some shading (a gradient down each tier, a lit side), because a
+body's characters follow its lightness: a flat colour is a wall of one character.
 
 Cells have a size: a comb cell of 13-15 px means a shape needs about 5 cells across to read. Size
 creatures and objects for the cell, not for the screen: a koi is 170-240 px long and a third as

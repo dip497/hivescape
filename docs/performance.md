@@ -26,14 +26,15 @@ Measured 2026-10-30 in a container with no GPU. WebGL is SwiftShader; Canvas2D i
 |---|---|---|---|---|
 | webgl2 | comb | 1 | 9072 | 2.5 / 4.2 ms |
 | webgl2 | comb | 2 | 9072 | 2.4 / 3.6 ms |
-| webgl2 | glyph | 1 | 8480 | 2.3 / 4.5 ms |
+| webgl2 | ascii | 1 | 11200 | 3.9 / 4.6 ms |
+| webgl2 | ascii | 2 | 11200 | 3.8 / 4.2 ms |
 | webgl2 | pixel | 1 | 20340 | 4.0 / 6.5 ms |
 | webgl2 | native | 1 | — | 9.3 / 16.9 ms |
 | webgl2 | native | 2 | — | 30.9 / 37.3 ms |
 | canvas2d | comb | 1 | 9072 | 11.2 / 14.3 ms |
 | canvas2d | comb | 2 | 9072 | 11.3 / 13.9 ms |
-| canvas2d | glyph | 1 | 8480 | 6.9 / 7.6 ms |
-| canvas2d | glyph | 2 | 8480 | 7.2 / 8.9 ms |
+| canvas2d | ascii | 1 | 11200 | 15.5 / 17.3 ms |
+| canvas2d | ascii | 2 | 11200 | 15.1 / 17.7 ms |
 | canvas2d | pixel | 1 | 20340 | 12.9 / 13.8 ms |
 | canvas2d | native | 1 | — | 4.3 / 5.8 ms |
 | canvas2d | native | 2 | — | 9.0 / 11.2 ms |
@@ -47,9 +48,10 @@ What the numbers say:
   the cell count or pixel ratio.
 - **The CPU path's cost is flat in the cell count and the pixel ratio.** It draws five full-layer
   images, not one shape per cell. In an earlier version, which drew each cell as a path with a
-  bevel stamped on it, Campfire's comb took 28.8 ms at ratio 1 and 54.7 ms at ratio 2. Glyph took
-  941 ms at ratio 2, because it tinted a whole atlas for each new colour; it now tints one
-  character slot at a time.
+  bevel stamped on it, Campfire's comb took 28.8 ms at ratio 1 and 54.7 ms at ratio 2. The
+  characters of the earlier glyph style took 941 ms at ratio 2, because it tinted a whole atlas for
+  each new colour; ascii tints one character slot at a time, and draws a body's cut characters from
+  one black copy at a fixed strength, so they need no tint at all.
 - **Native on WebGL uploads a full-resolution picture every frame.** On SwiftShader that upload is
   a CPU copy: 9 ms at ratio 1 and 31 ms at ratio 2. With a GPU-backed canvas it is a copy on the
   GPU. If a native scene is heavy, show it on the 2D backend.

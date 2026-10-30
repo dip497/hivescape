@@ -30,6 +30,15 @@ its terraces, cottage and hives drawn at full resolution and lit the same way.
 |---|---|
 | ![Apiary: an isometric island with terraces, a cottage, hives and flower patches](docs/images/apiary-light.webp) | ![Apiary at night: the cottage window and the lamp light the island](docs/images/apiary-dark.webp) |
 
+Every scene can also be drawn in **ascii**, the way a terminal draws: each cell is read as a
+shape, so a fish's flank gets `(` and `)`, its belly `,` and `_`, a reed `|`, and its body is
+blocks of its colour with characters cut into them, dense in shadow and sparse in light.
+
+| Koi Pond in ascii | Up close |
+|---|---|
+| ![Koi Pond in the ascii style: koi as blocks of characters with bracketed edges](docs/images/koi-ascii.webp) | ![Close-up of an ascii koi: red patches of * + = cut into white blocks, ( ) at its sides](docs/images/koi-ascii-close.webp) |
+| ![Campfire in the ascii style: firs of x % # with ( ) edges, the fire in tongues of + = *, grass as \\ \| /](docs/images/campfire-ascii.webp) | ![Koi Pond in ascii behind the Hivemind canvas](docs/images/in-hivemind-ascii.webp) |
+
 ## What a scene can be
 
 - **Any view.** Top-down (Koi Pond), side-on in layers that part as the pointer moves (Campfire),
@@ -40,7 +49,7 @@ its terraces, cottage and hives drawn at full resolution and lit the same way.
   | Style | What it draws |
   |---|---|
   | `comb` | Lit hexagonal cells in relief. The default. |
-  | `glyph` | Characters, lit. |
+  | `ascii` | Character cells, as a terminal draws them: a body is a block with a character cut into it, an edge the light character that sits where the shape does (`. , ' ( )`), a thin stroke a line character along it (`- \| / \`). |
   | `pixel` | Square cells, flat or in relief. |
   | `native` | The picture itself at full resolution, lit and glowing: plain 2D illustration. |
 
@@ -54,7 +63,7 @@ its terraces, cottage and hives drawn at full resolution and lit the same way.
 
 ```bash
 pnpm install
-pnpm dev                                     # Koi Pond at http://127.0.0.1:5174/ (?look=light, ?kind=glyph, ?backend=canvas2d)
+pnpm dev                                     # Koi Pond at http://127.0.0.1:5174/ (?look=light, ?kind=ascii, ?backend=canvas2d)
 node packages/cli/bin/hivescape.mjs shot scenes/campfire --kind comb,native   # pictures and a contact sheet, dark and light
 node packages/cli/bin/hivescape.mjs bench scenes/koi                          # time per frame, per backend and style
 pnpm test                                    # unit and scene tests
@@ -100,6 +109,7 @@ Every scene can be a [Hivemind](https://github.com/dip497/hivemind) live wallpap
 ```bash
 node packages/cli/bin/hivescape.mjs pack scenes/koi      --out out/hivemind --package @you/scenes --name "My scenes"
 node packages/cli/bin/hivescape.mjs pack scenes/campfire --out out/hivemind --package @you/scenes
+node packages/cli/bin/hivescape.mjs pack scenes/koi      --out out/hivemind --package @you/scenes --kind ascii   # "Koi Pond (ASCII)"
 hive plugins check out/hivemind      # runs each wallpaper sandboxed, as the app does
 hive plugins install out/hivemind    # the app offers it as your background
 ```
@@ -136,5 +146,5 @@ What it costs is in [docs/performance.md](docs/performance.md).
 
 ## Licence
 
-MIT. The bundled JetBrains Mono (used for the glyph style) is under the SIL Open Font License; see
+MIT. The bundled JetBrains Mono (used for the ascii style) is under the SIL Open Font License; see
 `packages/render/fonts/OFL.txt`.

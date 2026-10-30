@@ -6,13 +6,15 @@
  * in one draw and cuts it into cells with a mask, and lays the cells' bevel over them, both drawn
  * once per size. Five full-layer draws a frame, whatever the cell count; no cast shadows. The layer
  * is kept at one device pixel per CSS pixel: the CSS scales it on a denser screen. Characters (the
- * glyph style and the overlay) are stamped one by one from a tinted copy of their own slot.
+ * ascii style's and the overlay's) are stamped one by one from a tinted copy of their own slot; a
+ * body's cut character is one black copy at a fixed strength, so it needs no tint per colour.
  */
 import { clamp, smoothstep } from "@hivescape/core";
 import { ATLAS_COLS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
 import { cellHash, cellSize, KEY, lightness, ringAt, type FrameInput } from "./frame.js";
-import { averageCells } from "./kernel.js";
+import { CUT, bodyGlyph, edgeGlyph } from "./ascii.js";
+import { averageCells, cellShapes } from "./kernel.js";
 import { ctx2d, LS, offscreen, SS, type AnyCanvas, type Ctx2D, type Grid } from "./surface.js";
 
 /** Characters tinted one colour each, one slot a copy, colours rounded to 5 bits a channel. */
@@ -59,6 +61,7 @@ export class Canvas2DBackend implements Backend {
   private g: Ctx2D;
   private cells = new Float32Array(0);
   private lights = new Float32Array(0);
+  private shapesOut = new Float32Array(0);
   private tints = new Tints();
   /** One pixel a cell (two a cell across for a comb, so odd rows can sit half a cell over). */
   private tiny: AnyCanvas = offscreen(1, 1);
@@ -174,17 +177,21 @@ export class Canvas2DBackend implements Backend {
     averageCells(px, cols, rows, SS, this.cells, hex);
     const C = this.cells, amb = style.ambient, key = style.key;
     const torch = style.torch > 0 && pointer.active ? style.torch : 0;
-    const glyph = style.kind === "glyph";
+    const ascii = style.kind === "ascii";
     const tick = Math.floor(f.time * style.flicker);
     const TW = hex ? cols * 2 + 1 : cols;
-    if (!glyph) {
-      if (this.tiny.width !== TW || this.tiny.height !== rows || !this.tinyImg) {
-        this.tiny = offscreen(TW, rows);
-        this.tinyImg = ctx2d(this.tiny).createImageData(TW, rows);
-      }
-      this.tinyImg.data.fill(0);
+    if (this.tiny.width !== TW || this.tiny.height !== rows || !this.tinyImg) {
+      this.tiny = offscreen(TW, rows);
+      this.tinyImg = ctx2d(this.tiny).createImageData(TW, rows);
     }
-    const T = this.tinyImg?.data;
+    this.tinyImg.data.fill(0);
+    const T = this.tinyImg.data;
+    // ascii: each cell read as a shape; its characters drawn after the blocks, cut first, edges after.
+    if (ascii) {
+      if (this.shapesOut.length !== cols * rows * 6) this.shapesOut = new Float32Array(cols * rows * 6);
+      cellShapes(px, cols, rows, SS, cw, ch, this.shapesOut);
+    }
+    const S = this.shapesOut, cuts: number[] = [], edges: number[] = [];
 
     for (let j = 0; j < rows; j++) {
       for (let i = 0; i < cols; i++) {
@@ -208,17 +215,20 @@ export class Canvas2DBackend implements Backend {
         let r = (r0 * lr) / 255, gg = (g0 * lg) / 255, b = (b0 * lb) / 255;
         if (em > 0 && L) { r += (r0 * 1.12 + L[o]! * 0.35 - r) * em; gg += (g0 * 1.12 + L[o + 1]! * 0.35 - gg) * em; b += (b0 * 1.12 + L[o + 2]! * 0.35 - b) * em; }
         r = Math.min(255, r); gg = Math.min(255, gg); b = Math.min(255, b);
-        if (glyph) {
-          const cov = clamp((a - style.soft) / Math.max(style.threshold - style.soft, 1e-3));
-          const top = f.ramp.length - 1, l = lightness(r0, g0, b0);
-          const ri = Math.min(top, Math.max(1, Math.floor(cov * top * 0.6 + l * top * 0.4 + (cellHash(i, j, tick) - 0.5) * 1.2)));
-          const sc = 1 + ring * 0.25;
-          g.globalAlpha = Math.min(1, a * 1.6);
-          g.drawImage(this.tints.get(atlas, f.ramp[ri]!, r | 0, gg | 0, b | 0) as CanvasImageSource, x - (cw * sc) / 2, y - (ch * sc) / 2, cw * sc, ch * sc);
-          continue;
+        if (ascii) {
+          const lift = -ring * ch * 0.4;
+          if (a < style.threshold) {
+            const q = (j * cols + i) * 6;
+            const e = edgeGlyph({ cov: S[q]!, cx: S[q + 1]!, cy: S[q + 2]!, aniso: S[q + 3]!, angle: S[q + 4]!, len: S[q + 5]! });
+            const k = f.look.dark ? 0.12 : -0.15;
+            edges.push(f.edges[e]!, x, y + lift, k > 0 ? r + (255 - r) * k : r * (1 + k), k > 0 ? gg + (255 - gg) * k : gg * (1 + k), k > 0 ? b + (255 - b) * k : b * (1 + k), Math.min(1, 0.5 + a));
+            continue;
+          }
+          const flick = style.flicker > 0 ? (cellHash(i, j, tick) - 0.5) * 0.12 : 0;
+          cuts.push(f.ramp[bodyGlyph(clamp(lightness(r, gg, b) + flick), f.ramp.length, cellHash(i, j, 0) - 0.5)]!, x, y + lift);
         }
         // A partly covered cell shows fainter where the GPU shows it smaller: the same area of colour.
-        const alpha = Math.round(Math.min(1, size * size) * (style.kind === "pixel" && a < style.threshold ? a : 1) * 255);
+        const alpha = ascii ? 255 : Math.round(Math.min(1, size * size) * (style.kind === "pixel" && a < style.threshold ? a : 1) * 255);
         const p0 = hex ? i * 2 + (j & 1 ? 0 : 1) : i;
         for (let k = 0; k < (hex ? 2 : 1); k++) {
           const q = (j * TW + p0 + k) * 4;
@@ -228,7 +238,7 @@ export class Canvas2DBackend implements Backend {
     }
     g.globalAlpha = 1;
 
-    if (!glyph && T) {
+    {
       this.shapes(grid, f);
       ctx2d(this.tiny).putImageData(this.tinyImg!, 0, 0);
       if (this.scratch.width !== this.canvas.width || this.scratch.height !== this.canvas.height) this.scratch = offscreen(this.canvas.width, this.canvas.height);
@@ -244,6 +254,18 @@ export class Canvas2DBackend implements Backend {
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.drawImage(this.scratch as CanvasImageSource, 0, 0);
       g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    }
+    if (ascii) {
+      // A body's character is cut into its block: black at the share that leaves CUT of its colour.
+      const sw = atlas.slotW, sh = atlas.slotH;
+      g.globalAlpha = 0.92 * (1 - (f.look.dark ? CUT.dark : CUT.light));
+      for (let n = 0; n < cuts.length; n += 3) g.drawImage(this.tints.get(atlas, cuts[n]!, 0, 0, 0) as CanvasImageSource, cuts[n + 1]! - cw / 2, cuts[n + 2]! - ch / 2, cw, ch);
+      for (let n = 0; n < edges.length; n += 7) {
+        g.globalAlpha = edges[n + 6]!;
+        g.drawImage(this.tints.get(atlas, edges[n]!, edges[n + 3]! | 0, edges[n + 4]! | 0, edges[n + 5]! | 0) as CanvasImageSource, edges[n + 1]! - cw / 2, edges[n + 2]! - ch / 2, cw, ch);
+      }
+      g.globalAlpha = 1;
+      void sw; void sh;
     }
     this.drawOverlay(f, atlas);
   }

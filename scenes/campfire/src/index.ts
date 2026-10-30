@@ -50,7 +50,7 @@ function firsFor(w: World): Fir[] {
 
 function tuftsFor(w: World): Tuft[] {
   const out: Tuft[] = [], f = fire(w), { w: W, h: H } = w.size, horizon = horizonOf(w);
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 36; i++) {
     const y = horizon + 14 + w.rng() ** 0.8 * (H - horizon), x = w.rng() * W;
     // Trodden bare round the fire.
     if (Math.hypot((x - f.x) / 1.6, y - f.y) < 150 * f.s) continue;
@@ -151,7 +151,7 @@ export default defineScene<Camp>({
     for (const fir of s.firs) if (fir.depth < 1) { const o = parallax(s.cam, fir.depth); drawFir(g, fir, horizon + 6 + o.y, L.farFirs, o.x); }
     const go = parallax(s.cam, 0.6);
     // Tufts of grass over the clearing, thinning toward the fire.
-    g.fillStyle = L.grass;
+    g.strokeStyle = L.grass;
     for (const t of s.tufts) {
       const o = parallax(s.cam, t.depth);
       drawTuft(g, t.x + o.x, t.y + o.y, t.s);
@@ -239,10 +239,13 @@ function drawTongue(g: Paint, x: number, y: number, w: number, h: number, lean: 
 }
 
 function drawTuft(g: Paint, x: number, y: number, s: number): void {
+  // Blades are thin in life, so they stay thin: strokes, which characters draw as | / \.
+  g.lineWidth = 2.2;
+  g.lineCap = "round";
   for (let b = -2; b <= 2; b++) {
     g.beginPath();
-    g.moveTo(x + b * 5 * s - 3 * s, y); g.quadraticCurveTo(x + b * 7 * s, y - 16 * s, x + b * 10 * s, y - (22 - Math.abs(b) * 4) * s); g.lineTo(x + b * 5 * s + 3 * s, y);
-    g.closePath(); g.fill();
+    g.moveTo(x + b * 4 * s, y); g.quadraticCurveTo(x + b * 6 * s, y - 14 * s, x + b * 11 * s, y - (30 - Math.abs(b) * 6) * s);
+    g.stroke();
   }
 }
 
@@ -253,11 +256,21 @@ function drawLog(g: Paint, x: number, y: number, len: number, r: number, rot: nu
 }
 
 function drawFir(g: Paint, f: Fir, base: number, colour: string, dx: number): void {
-  g.fillStyle = colour;
   const tiers = 5, x = f.x + dx;
+  g.fillStyle = shadeOf(colour, -0.35);
+  g.fillRect(x - f.w * 0.05, base - f.h * 0.15, f.w * 0.1, f.h * 0.15);
   for (let i = 0; i < tiers; i++) {
     const top = base - f.h + (i / tiers) * f.h * 0.75, bottom = top + f.h * 0.38, half = (f.w / 2) * (0.35 + (i / tiers) * 0.75);
+    // Each tier lit along its top and darker in the shade under the tier above.
+    const tone = g.createLinearGradient(0, top, 0, bottom);
+    tone.addColorStop(0, shadeOf(colour, 0.22)); tone.addColorStop(0.55, colour); tone.addColorStop(1, shadeOf(colour, -0.3));
+    g.fillStyle = tone;
     g.beginPath(); g.moveTo(x, top); g.lineTo(x + half, bottom); g.lineTo(x - half, bottom); g.closePath(); g.fill();
   }
-  g.fillRect(x - f.w * 0.05, base - f.h * 0.15, f.w * 0.1, f.h * 0.15);
+}
+
+/** `colour` (#rrggbb) moved toward white (k > 0) or black (k < 0). */
+function shadeOf(colour: string, k: number): string {
+  const c = hex(colour), t = k > 0 ? 255 : 0, a = Math.abs(k);
+  return `rgb(${Math.round(c[0] + (t - c[0]) * a)},${Math.round(c[1] + (t - c[1]) * a)},${Math.round(c[2] + (t - c[2]) * a)})`;
 }

@@ -24,3 +24,39 @@ export function averageCells(px: Uint8ClampedArray, cols: number, rows: number, 
     }
   }
 }
+
+/**
+ * The ascii style's reading of each cell from the same `ss x ss` samples: its coverage, where the
+ * covered part sits (0..1 across and down), how much it is a stroke (0 round .. 1 a line) and the
+ * stroke's direction (radians, y down) and length (a share of the cell's longer side). Moments are
+ * taken in CSS pixels, `cw x ch` a cell, so a tall cell's diagonal is a diagonal. Six numbers a cell
+ * into `out`.
+ */
+export function cellShapes(px: Uint8ClampedArray, cols: number, rows: number, ss: number, cw: number, ch: number, out: Float32Array): void {
+  const rw = cols * ss * 4, n = ss * ss;
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      let s = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+      for (let v = 0; v < ss; v++) {
+        const y = ((v + 0.5) / ss) * ch;
+        for (let u = 0, p = (j * ss + v) * rw + i * ss * 4; u < ss; u++, p += 4) {
+          const w = px[p + 3]! / 255;
+          if (w === 0) continue;
+          const x = ((u + 0.5) / ss) * cw;
+          s += w; sx += w * x; sy += w * y; sxx += w * x * x; syy += w * y * y; sxy += w * x * y;
+        }
+      }
+      const o = (j * cols + i) * 6;
+      out[o] = s / n;
+      if (s <= 0) { out[o + 1] = 0.5; out[o + 2] = 0.5; out[o + 3] = 0; out[o + 4] = 0; out[o + 5] = 0; continue; }
+      const mx = sx / s, my = sy / s;
+      const a = sxx / s - mx * mx, b = syy / s - my * my, c = sxy / s - mx * my;
+      out[o + 1] = mx / cw; out[o + 2] = my / ch;
+      out[o + 3] = a + b > 1e-6 ? Math.sqrt((a - b) * (a - b) + 4 * c * c) / (a + b) : 0;
+      out[o + 4] = 0.5 * Math.atan2(2 * c, a - b);
+      // A stroke of length L spread evenly has variance L² / 12 along it.
+      const major = (a + b) / 2 + Math.sqrt(((a - b) / 2) ** 2 + c * c);
+      out[o + 5] = Math.sqrt(12 * major) / Math.max(cw, ch);
+    }
+  }
+}

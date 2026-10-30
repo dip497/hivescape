@@ -135,11 +135,15 @@ describe("style", () => {
     expect(s.cell[1]).toBeCloseTo(20 * Math.sqrt(3) / 2, 6);
   });
   test("a host that picks another kind keeps only the scene's light, not its tuning for its own kind", () => {
-    const s = resolveStyle({ kind: "comb", cell: [13, 0], gap: 9, ambient: 0.4, glow: 0.9 }, DARK, { kind: "glyph" });
-    expect(s.kind).toBe("glyph");
-    expect(s.gap).toBe(STYLES.glyph.gap);
-    expect(s.cell).toEqual(STYLES.glyph.cell);
-    expect([s.ambient, s.glow]).toEqual([0.4, 0.9]);
+    const s = resolveStyle({ kind: "comb", cell: [13, 0], gap: 9, ambient: 0.6, glow: 0.9 }, DARK, { kind: "pixel" });
+    expect(s.kind).toBe("pixel");
+    expect(s.gap).toBe(STYLES.pixel.gap);
+    expect(s.cell).toEqual(STYLES.pixel.cell);
+    expect([s.ambient, s.glow]).toEqual([0.6, 0.9]);
+  });
+  test("characters are not dimmed below readable by a night scene made for another kind", () => {
+    expect(resolveStyle({ kind: "comb", ambient: 0.3 }, DARK, { kind: "ascii" }).ambient).toBe(0.65);
+    expect(resolveStyle({ kind: "ascii", ambient: 0.3 }, DARK).ambient).toBe(0.3);
   });
 });
 
