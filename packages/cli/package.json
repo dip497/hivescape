@@ -1,0 +1,9 @@
+{
+  "name": "@hivescape/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "hivescape": "./bin/hivescape.mjs" },
+  "dependencies": { "esbuild": "^0.25.0", "playwright-core": "^1.50.0" },
+  "repository": { "type": "git", "url": "git+https://github.com/dip497/hivescape.git", "directory": "packages/cli" }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "hivescape-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test packages scenes",
+    "hivescape": "node packages/cli/bin/hivescape.mjs",
+    "dev": "node packages/cli/bin/hivescape.mjs dev scenes/koi",
+    "shots": "node packages/cli/bin/hivescape.mjs shot scenes/koi && node packages/cli/bin/hivescape.mjs shot scenes/campfire",
+    "bench": "node packages/cli/bin/hivescape.mjs bench scenes/koi"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.50.0",
+    "typescript": "^5.9.0"
+  }
+}

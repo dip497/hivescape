@@ -1,0 +1,9 @@
+{
+  "name": "@hivescape/scene-campfire",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "A campfire in a clearing under the stars: flames lean to the pointer, a click throws a log on.",
+  "exports": { ".": "./src/index.ts" },
+  "hivescape": { "name": "Campfire", "description": "A campfire in a clearing under the stars: flames lean to the pointer, and a click throws a log on." }
+}

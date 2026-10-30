@@ -1,0 +1,9 @@
+{
+  "name": "@hivescape/scene-koi",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Koi drift through a lily pond, gather under a resting pointer, and race for the food a click drops.",
+  "exports": { ".": "./src/index.ts" },
+  "hivescape": { "name": "Koi Pond", "description": "Koi drift through a lily pond, gather under a resting pointer, and race for the food a click drops." }
+}

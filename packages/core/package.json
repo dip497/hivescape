@@ -1,0 +1,10 @@
+{
+  "name": "@hivescape/core",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": { ".": "./src/index.ts" },
+  "repository": { "type": "git", "url": "git+https://github.com/dip497/hivescape.git", "directory": "packages/core" },
+  "homepage": "https://github.com/dip497/hivescape#readme"
+}

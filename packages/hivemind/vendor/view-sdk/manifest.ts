@@ -1,0 +1,240 @@
+/**
+ * hivemind-view.json — the manifest a community view ships next to its entry.
+ * Validated by `hive plugins install`, by the desktop loader, and (through this
+ * module) by plugin authors' own builds. Pure: no filesystem here.
+ */
+import { PROTOCOL_VERSION, VIEW_PERMISSIONS, type ViewPermission } from "./protocol.js";
+import { checkSettingFields, type SettingField } from "./settings.js";
+import { TOKEN_FIELD_PREFIX, checkTokenDecls, tokenFields, type TokenDecl } from "./tokens.js";
+import { parseCategory, type PluginCategory } from "./category.js";
+import { parsePluginCommands, type PluginCommand } from "./commands.js";
+
+export const MANIFEST_FILE = "hivemind-view.json";
+
+export interface ViewManifest {
+  /** Stable id: install path, registry id, layout-blob key. `name`, or `@owner/name` when it
+   *  was published on HiveHub — `owner` is the GitHub account that published it. */
+  id: string;
+  name: string;
+  /** One line on what it is for, shown under its name wherever views are listed. */
+  description?: string;
+  /** Its mark in lists: a relative path to an `.svg` in the package, drawn in one colour like the app's icons. */
+  icon?: string;
+  /** semver-ish `x.y.z` (shown in `hive plugins list`; not compared by the host). */
+  version: string;
+  /** Relative path to ONE bundled `.html` (loaded as-is) or `.js` (wrapped in a
+   *  host-generated page as a module script). Everything it references must sit
+   *  under the package dir and be relative. */
+  entry: string;
+  /** Protocol version the plugin speaks; a host refuses a newer one at load. */
+  protocol: number;
+  /** What the plugin may ask for beyond the base (projection, status, selection,
+   *  reveal, surfaces). Unknown names are refused at install AND at load. */
+  permissions: ViewPermission[];
+  /** What it is for (`other` when the manifest says nothing). */
+  category: PluginCategory;
+  /** What an agent may ask it to do while it runs (`hm.onCommand`); none when it declares none. */
+  commands: PluginCommand[];
+  /** Optional relative dir served alongside the entry (default: the whole package dir). */
+  assets?: string;
+  /** Who wrote it, where it came from, and under what terms — shown wherever the user is
+   *  asked to trust it. These are the PACKAGE'S OWN CLAIMS: nothing here is verified, and a
+   *  host must never present them as if they were. A registry's verified owner is separate. */
+  author?: string;
+  homepage?: string;
+  license?: string;
+  /** The user's wallpaper is mounted behind the view unless this says otherwise. A view that
+   *  paints an opaque scene of its own sets it to false: nothing would show through, and the
+   *  wallpaper's animation and blur would still cost every frame. */
+  wallpaper?: boolean;
+  /** Where the app's toolbar sits over the view: "top", "bottom" (the default), "hidden" behind a
+   *  handle, or "off" for a view that offers what the toolbar does itself or not at all. */
+  toolbar?: ViewToolbar;
+  /** Which edge of the screen the app's widget cards start down over the view: "right", the
+   *  default, or "left" for a view that keeps its own panels on the right. A card the person
+   *  moved stays where they put it. */
+  widgets?: ViewWidgetEdge;
+  /** It lays itself out for a phone (`hello.device.compact`, protocol 1.5): only a view that says
+   *  so is offered on the person's phone. */
+  phone?: boolean;
+  /** The app draws its Layers rail (frames, their tiles and every frame action) beside the view,
+   *  so a view that arranges tiles need not draw one of its own. */
+  layers?: boolean;
+  /** Where what it saves (`setLayout`) is kept: "shared", the default, in the workspace, the same
+   *  for everyone in it; "personal", on this device, each person's own. */
+  layout?: "shared" | "personal";
+  /** What the person can set it to, drawn by the app in its Settings; the view reads the values
+   *  as `hm.settings` and hears each change (protocol 1.7). */
+  settings?: SettingField[];
+  /** 1.16: colours of its own, each with a default in dark and light that may be one of the app's
+   *  (`=accent`); the person can set each one, and the view reads `var(--hm-token-<id>)`. */
+  tokens?: TokenDecl[];
+  /** 1.17 (feature `ownFiles`): it `fetch`es its own files (`fetch("./levels.json")`). Without it the
+   *  app lets it fetch nothing; its pages still load their scripts, styles, pictures and fonts. */
+  files?: boolean;
+}
+
+/** Every setting a view has: the ones it declares, then a colour for each of its tokens. The one
+ *  list the Settings page, the CLI and the view's own `hm.settings` are drawn from. */
+export function viewSettingFields(m: Pick<ViewManifest, "settings" | "tokens">): SettingField[] {
+  return [...(m.settings ?? []), ...tokenFields(m.tokens ?? [])];
+}
+
+export type ViewToolbar = "top" | "bottom" | "hidden" | "off";
+const TOOLBARS: readonly ViewToolbar[] = ["top", "bottom", "hidden", "off"];
+export type ViewWidgetEdge = "left" | "right";
+
+// A bare name is built in or installed from a folder; `@owner/name` came from HiveHub. `--` is
+// refused because the scoped form becomes a hostname by turning `@owner/name` into `owner--name`,
+// and a bare id must never be able to pass for one.
+const ID_RE = /^(?!.*--)(?:@[a-z0-9][a-z0-9-]{0,38}\/)?[a-z0-9][a-z0-9-]{1,63}$/;
+
+/** The sandbox origin's hostname for a view: the id itself, or `owner--name` for a scoped one.
+ *  A hostname cannot hold `@` or `/`, and a label is at most 63 characters. */
+export const viewHost = (id: string) => (id.startsWith("@") ? id.slice(1).replace("/", "--") : id);
+
+/** Whether a string is a usable view id — the one check everything that takes an id uses. */
+export const isViewId = (id: string) => ID_RE.test(id) && viewHost(id).length <= 63;
+/** The longest description a view may give, as widgets and tools allow. */
+const DESCRIPTION_MAX = 200;
+const VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+
+/** A relative path that cannot leave the package dir. */
+export function isSafeRelativePath(p: string): boolean {
+  if (typeof p !== "string" || p.length === 0 || p.length > 256) return false;
+  if (p.startsWith("/") || p.includes("\\") || /^[A-Za-z]:/.test(p) || p.includes("\0")) return false;
+  return p.split("/").every((seg) => seg.length > 0 && seg !== "." && seg !== "..");
+}
+
+export type ManifestResult = { ok: true; manifest: ViewManifest } | { ok: false; errors: string[] };
+
+/** Validate a parsed `hivemind-view.json`. Every problem is reported, not just the first. */
+export function validateViewManifest(raw: unknown): ManifestResult {
+  const errors: string[] = [];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, errors: ["manifest must be a JSON object"] };
+  const m = raw as Record<string, unknown>;
+  const str = (k: string, max = 128): string | null => {
+    const v = m[k];
+    if (typeof v !== "string" || v.trim().length === 0) { errors.push(`"${k}" must be a non-empty string`); return null; }
+    if (v.length > max) { errors.push(`"${k}" is longer than ${max} characters`); return null; }
+    return v;
+  };
+  const id = str("id", 105);
+  if (id !== null && !ID_RE.test(id)) errors.push(`"id" must be a name or @owner/name, lowercase letters, digits and single dashes (got ${JSON.stringify(id)})`);
+  else if (id !== null && viewHost(id).length > 63) errors.push(`"id" is too long: owner and name together must fit in 61 characters`);
+  const name = str("name", 64);
+  const version = str("version", 64);
+  if (version !== null && !VERSION_RE.test(version)) errors.push(`"version" must look like 1.2.3 (got ${JSON.stringify(version)})`);
+  const entry = str("entry", 256);
+  if (entry !== null) {
+    if (!isSafeRelativePath(entry)) errors.push(`"entry" must be a relative path inside the package (got ${JSON.stringify(entry)})`);
+    else if (!/\.(html|js)$/.test(entry)) errors.push(`"entry" must end in .html or .js (got ${JSON.stringify(entry)})`);
+  }
+  let protocol = PROTOCOL_VERSION;
+  if (m.protocol !== undefined) {
+    if (typeof m.protocol !== "number" || !Number.isInteger(m.protocol) || m.protocol < 1) errors.push(`"protocol" must be a positive integer`);
+    else protocol = m.protocol;
+  }
+  const permissions: ViewPermission[] = [];
+  if (m.permissions !== undefined) {
+    if (!Array.isArray(m.permissions)) errors.push(`"permissions" must be an array`);
+    else for (const p of m.permissions) {
+      if (typeof p !== "string" || !(VIEW_PERMISSIONS as readonly string[]).includes(p)) errors.push(`unknown permission ${JSON.stringify(p)} (known: ${VIEW_PERMISSIONS.join(", ")})`);
+      else if (!permissions.includes(p as ViewPermission)) permissions.push(p as ViewPermission);
+    }
+  }
+  const cat = parseCategory(m.category);
+  if ("error" in cat) errors.push(cat.error);
+  const cmds = parsePluginCommands(m.commands);
+  if ("error" in cmds) errors.push(cmds.error);
+  let description: string | undefined;
+  if (m.description !== undefined) {
+    if (typeof m.description !== "string" || m.description.trim().length === 0 || m.description.length > DESCRIPTION_MAX || /[\r\n]/.test(m.description)) errors.push(`"description" must be one line of at most ${DESCRIPTION_MAX} characters`);
+    else description = m.description;
+  }
+  let icon: string | undefined;
+  if (m.icon !== undefined) {
+    if (typeof m.icon !== "string" || !isSafeRelativePath(m.icon) || !m.icon.endsWith(".svg")) errors.push(`"icon" must be a relative path to an .svg file inside the package`);
+    else icon = m.icon;
+  }
+  let author: string | undefined;
+  if (m.author !== undefined) {
+    if (typeof m.author !== "string" || m.author.trim().length === 0 || m.author.length > 80) errors.push(`"author" must be a non-empty string of at most 80 characters`);
+    else author = m.author;
+  }
+  let homepage: string | undefined;
+  if (m.homepage !== undefined) {
+    // https only: a plugin's own link is opened in the user's browser.
+    if (typeof m.homepage !== "string" || !/^https:\/\/\S{1,200}$/.test(m.homepage)) errors.push(`"homepage" must be an https:// URL`);
+    else homepage = m.homepage;
+  }
+  let license: string | undefined;
+  if (m.license !== undefined) {
+    if (typeof m.license !== "string" || !/^[A-Za-z0-9.+-]{1,40}$/.test(m.license)) errors.push(`"license" must be a short identifier like MIT or Apache-2.0`);
+    else license = m.license;
+  }
+  let wallpaper: boolean | undefined;
+  if (m.wallpaper !== undefined) {
+    if (typeof m.wallpaper !== "boolean") errors.push(`"wallpaper" must be true or false`);
+    else wallpaper = m.wallpaper;
+  }
+  let toolbar: ViewToolbar | undefined;
+  if (m.toolbar !== undefined) {
+    if (!TOOLBARS.includes(m.toolbar as ViewToolbar)) errors.push(`"toolbar" must be "top", "bottom", "hidden" or "off"`);
+    else toolbar = m.toolbar as ViewToolbar;
+  }
+  let phone: boolean | undefined;
+  if (m.phone !== undefined) {
+    if (typeof m.phone !== "boolean") errors.push(`"phone" must be true or false`);
+    else phone = m.phone;
+  }
+  let widgets: ViewWidgetEdge | undefined;
+  if (m.widgets !== undefined) {
+    if (m.widgets !== "left" && m.widgets !== "right") errors.push(`"widgets" must be "left" or "right"`);
+    else widgets = m.widgets;
+  }
+  let layers: boolean | undefined;
+  if (m.layers !== undefined) {
+    if (typeof m.layers !== "boolean") errors.push(`"layers" must be true or false`);
+    else layers = m.layers;
+  }
+  let layout: "shared" | "personal" | undefined;
+  if (m.layout !== undefined) {
+    if (m.layout !== "shared" && m.layout !== "personal") errors.push(`"layout" must be "shared" or "personal"`);
+    else layout = m.layout;
+  }
+  let settings: SettingField[] | undefined;
+  if (m.settings !== undefined) {
+    if (!Array.isArray(m.settings)) errors.push(`"settings" must be an array`);
+    else {
+      // A field the app cannot draw is the author's mistake: say which, rather than drop it.
+      const checked = checkSettingFields(m.settings);
+      settings = checked.fields;
+      for (const i of checked.refused) errors.push(`settings[${i}] is not a field: an id, a type (boolean, number, text, choice, color, multi or list), a default that fits it, and a showIf that names a field before it`);
+      for (const f of settings) if (f.id.startsWith(TOKEN_FIELD_PREFIX)) errors.push(`settings id "${f.id}": ids starting "${TOKEN_FIELD_PREFIX}" are the colours of its tokens`);
+    }
+  }
+  let tokens: TokenDecl[] | undefined;
+  if (m.tokens !== undefined) {
+    if (!Array.isArray(m.tokens)) errors.push(`"tokens" must be an array`);
+    else {
+      const checked = checkTokenDecls(m.tokens);
+      tokens = checked.tokens;
+      for (const i of checked.refused) errors.push(`tokens[${i}] is not a token: an id of lowercase letters, digits and dashes, and a dark and a light colour, each #rrggbb or =<app colour>`);
+    }
+  }
+  let files: boolean | undefined;
+  if (m.files !== undefined) {
+    if (typeof m.files !== "boolean") errors.push(`"files" must be true or false`);
+    else files = m.files;
+  }
+  let assets: string | undefined;
+  if (m.assets !== undefined) {
+    if (typeof m.assets !== "string" || !isSafeRelativePath(m.assets)) errors.push(`"assets" must be a relative path inside the package`);
+    else assets = m.assets;
+  }
+  for (const k of Object.keys(m)) if (!["id", "name", "description", "icon", "version", "entry", "protocol", "permissions", "assets", "wallpaper", "toolbar", "widgets", "phone", "layers", "layout", "author", "homepage", "license", "settings", "tokens", "files", "category", "commands"].includes(k)) errors.push(`unknown field "${k}"`);
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true, manifest: { id: id!, name: name!, version: version!, entry: entry!, protocol, permissions, category: "category" in cat ? cat.category : "other", commands: "commands" in cmds ? cmds.commands : [], ...(description ? { description } : {}), ...(icon ? { icon } : {}), ...(assets ? { assets } : {}), ...(wallpaper === undefined ? {} : { wallpaper }), ...(toolbar ? { toolbar } : {}), ...(widgets ? { widgets } : {}),
+    ...(phone === undefined ? {} : { phone }), ...(layers === undefined ? {} : { layers }), ...(layout === undefined ? {} : { layout }), ...(author ? { author } : {}), ...(homepage ? { homepage } : {}), ...(license ? { license } : {}), ...(settings?.length ? { settings } : {}), ...(tokens?.length ? { tokens } : {}), ...(files === undefined ? {} : { files }) } };
+}
