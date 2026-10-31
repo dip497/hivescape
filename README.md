@@ -2,7 +2,7 @@
 
 Living backgrounds that stay out of the way. From the Hivemind family.
 
-![Koi Pond at night: koi made of lit hexagonal cells, lanterns floating on the water](docs/images/koi-dark.webp)
+![The Hive: a honeycomb in relief, a bee for each agent, the one whose agent needs you dancing beside its tile](docs/images/hive-dark.webp)
 
 Hivescape is an animation engine for scenes that run behind other things: a desktop, a terminal
 canvas, a web page. A scene paints what is there in plain canvas calls and says what gives off
@@ -38,6 +38,28 @@ blocks of its colour with characters cut into them, dense in shadow and sparse i
 |---|---|
 | ![Koi Pond in the ascii style: koi as blocks of characters with bracketed edges](docs/images/koi-ascii.webp) | ![Close-up of an ascii koi: red patches of * + = cut into white blocks, ( ) at its sides](docs/images/koi-ascii-close.webp) |
 | ![Campfire in the ascii style: firs of x % # with ( ) edges, the fire in tongues of + = *, grass as \\ \| /](docs/images/campfire-ascii.webp) | ![Koi Pond in ascii behind the Hivemind canvas](docs/images/in-hivemind-ascii.webp) |
+
+## Your agents, as creatures
+
+A scene can show the person's agents: Hivemind tells it each agent (its program, what it is doing)
+and where their tiles are, and the scene draws a creature for each. **The Hive** is the first:
+
+- each agent is a bee, its species from its program (honey bee, bumblebee, carpenter bee, orchid bee);
+- working, it flies out over open canvas and back to its cells; ready, it walks the comb; resting,
+  it is tucked into a cell;
+- when its agent **needs you**, it flies to that agent's tile and does the waggle dance beside it,
+  ringed and glowing in the theme's attention colour;
+- every turn its agent finishes well fills another of its cells with honey, so over a session the
+  comb shows the work done;
+- point at a bee and Hivemind names its agent; click it and you are at the agent's tile.
+
+| The dance | Day | In Hivemind, naming the agent under the pointer |
+|---|---|---|
+| ![A bumblebee doing the waggle dance in an attention-coloured ring](docs/images/hive-dance.webp) | ![The Hive by day](docs/images/hive-light.webp) | ![The Hive behind two agent tiles in Hivemind, the pointer over a bee and the app's label naming its agent](docs/images/hive-in-hivemind.webp) |
+
+In the comb style each wax cell is one of the renderer's own hexagons, so the comb is in relief and
+lit, while the bees are drawn crisp on the front layer over it. In ascii the comb is cells walled
+in `/ \ _ |` and the bees are characters too.
 
 ## What a scene can be
 
@@ -100,6 +122,9 @@ The full contract is in [`packages/core/src/scene.ts`](packages/core/src/scene.t
 | `picture` | every frame |
 | `light` | every frame |
 | `overlay` | every frame: exact characters and soft dots |
+| `front` | every frame: creatures at full resolution over the cells |
+| `spots` | after each frame: where each agent's creature is, for hover and click |
+| `done` | when an agent finishes a turn well |
 | `click`, `resize`, `settle` | when they happen |
 
 ## In Hivemind

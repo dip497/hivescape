@@ -39,6 +39,10 @@ Measured 2026-10-30 in a container with no GPU. WebGL is SwiftShader; Canvas2D i
 | canvas2d | native | 1 | — | 4.3 / 5.8 ms |
 | canvas2d | native | 2 | — | 9.0 / 11.2 ms |
 
+The Hive, with its bees on the full-resolution front layer, at the same size and on the same
+machine: comb 4.2 ms on WebGL and 11.1 ms on Canvas2D at ratio 1 (4.7 and 11.7 at 2); ascii
+2.6 ms and 14.3 ms (2.6 and 15.5 at 2).
+
 At 30 frames a second, a frame may take 33 ms. Below 20 ms of script, the scene stays under
 Hivemind's 60% limit.
 

@@ -65,11 +65,13 @@ export async function shot(dir, flags) {
   const tiles = [];
   try {
     for (const kind of kinds) for (const look of ["dark", "light"]) {
-      const q = new URLSearchParams({ look, bare: "1", seed: String(flags.seed ?? 1), ...(kind ? { kind } : {}), ...(flags.backend ? { backend: flags.backend } : {}) });
+      const q = new URLSearchParams({ look, bare: "1", seed: String(flags.seed ?? 1), ...(kind ? { kind } : {}), ...(flags.backend ? { backend: flags.backend } : {}), ...(flags.agents ? { agents: String(flags.agents), tiles: "1" } : {}) });
       const page = await open(browser, `http://127.0.0.1:${port}/?${q}`, w, h);
       const name = `${id}${kind ? "-" + kind : ""}-${look}`;
       const snap = async (step) => { const f = path.join(out, `${name}-${step}.png`); await page.screenshot({ path: f }); tiles.push({ f, label: `${kind || "default"} · ${look} · ${step.slice(1)}` }); };
-      await page.waitForTimeout(2500); await snap("1run");
+      // --wait: seconds before the first picture. A software GPU draws a few frames a second, and the
+      // clock catches up at most four steps a frame, so there a scene needs longer to reach a moment.
+      await page.waitForTimeout(+(flags.wait ?? 2.5) * 1000); await snap("1run");
       const [px, py] = [w * 0.58, h * 0.55];
       await page.mouse.move(px - 60, py - 30); await page.mouse.move(px, py, { steps: 8 }); await page.waitForTimeout(1800); await snap("2pointer");
       await page.mouse.click(px, py); await page.waitForTimeout(350); await snap("3click");

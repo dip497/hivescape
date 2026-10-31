@@ -61,12 +61,16 @@ export const PAGE = `<!doctype html><meta charset="utf-8"><title>Hivescape</titl
 <style>html,body{margin:0;height:100%;overflow:hidden}#stage{position:fixed;inset:0}
 #bar{position:fixed;left:12px;bottom:12px;z-index:9;font:12px ui-monospace,monospace;color:#ddd;background:#000a;padding:6px 10px;border-radius:8px;display:flex;gap:10px;align-items:center}
 #bar select,#bar button{font:inherit;background:#222;color:#ddd;border:1px solid #444;border-radius:6px;padding:2px 6px}
-body.bare #bar{display:none}</style>
+body.bare #bar{display:none}
+.tile{position:fixed;z-index:5;border-radius:10px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font:11px ui-monospace,monospace;padding:28px 12px 10px;box-sizing:border-box;overflow:hidden;white-space:pre}
+.tile b{position:absolute;left:12px;top:8px;font:600 11px system-ui}
+.tile i{position:absolute;right:12px;top:9px;width:8px;height:8px;border-radius:50%}
+#label{position:fixed;z-index:8;font:600 12px system-ui;padding:3px 8px;border-radius:6px;pointer-events:none;display:none}</style>
 <div id="stage"></div>
 <div id="bar"><b>hivescape</b>
 <select id="look"><option>dark</option><option>light</option></select>
 <select id="kind"><option value="">scene's style</option><option>comb</option><option>ascii</option><option>pixel</option><option>native</option></select>
-<span id="info"></span></div>
+<span id="info"></span></div><div id="label"></div>
 <script src="scene.js"></script>
 <script>
 const q = new URLSearchParams(location.search);
@@ -87,6 +91,40 @@ opts.thread = q.get("thread") || "auto";
 opts.workerSource = hivescape.workerSource;
 hivescape.mount(document.getElementById("stage"), hivescape.scene, opts).then(async (m) => {
   window.__mounted = m;
+  // Stand-in agents (?agents=N) and their tiles (?tiles=1), as Hivemind would tell them: each state
+  // shown, and now and then a finished turn.
+  const n = Math.min(8, +(q.get("agents") || 0));
+  if (n) {
+    const PROGRAMS = ["claude", "codex", "gemini", "claude", "amp", "codex", "claude", "gemini"];
+    const STATES = ["working", "needs-you", "ready", "working", "resting", "working", "ready", "working"];
+    const KINDS = { claude: 0.1, codex: 0.35, gemini: 0.6, amp: 0.85 };
+    const kindOf = (p) => KINDS[p] ?? 0.5;
+    const agents = Array.from({ length: n }, (_, i) => ({ id: "agent-" + (i + 1), program: PROGRAMS[i], kind: kindOf(PROGRAMS[i]), size: 0.82 + ((i * 37) % 18) / 100, state: STATES[i] }));
+    m.setAgents(agents);
+    const dark = lookName === "dark", ink = dark ? "#e8e9eb" : "#1d1f22";
+    if (q.get("tiles")) {
+      const W = innerWidth, H = innerHeight, spots = [[0.3, 0.2, 0.26, 0.3], [0.58, 0.16, 0.24, 0.26], [0.36, 0.56, 0.3, 0.28]];
+      const tiles = [];
+      spots.slice(0, Math.min(3, n)).forEach(([fx, fy, fw, fh], i) => {
+        const a = agents[i], t = document.createElement("div");
+        t.className = "tile";
+        Object.assign(t.style, { left: fx * W + "px", top: fy * H + "px", width: fw * W + "px", height: fh * H + "px", background: dark ? "rgba(22,22,26,0.72)" : "rgba(250,250,248,0.74)", color: ink, border: "1px solid " + (dark ? "#ffffff1f" : "#0000001a") });
+        t.innerHTML = "<b>" + a.program + "</b><i style='background:" + (a.state === "needs-you" ? "#e07a4f" : a.state === "working" ? "#5fb36a" : "#888") + "'></i>" + ["$ " + a.program, "> reading the repository…", "  src/index.ts", "  tests passed: 128", "> " + (a.state === "needs-you" ? "May I run the migration? [y/n]" : "editing src/scene.ts")].join("\\n");
+        document.body.appendChild(t);
+        tiles.push({ x0: fx * W, y0: fy * H, x1: (fx + fw) * W, y1: (fy + fh) * H, id: a.id });
+      });
+      m.setTiles(tiles);
+    }
+    let k = 0;
+    setInterval(() => { const working = agents.filter((a) => a.state === "working"); if (working.length) m.done(working[k++ % working.length].id); }, 4000);
+    const label = document.getElementById("label");
+    Object.assign(label.style, { background: dark ? "#000c" : "#fffc", color: ink });
+    addEventListener("pointermove", (e) => {
+      const id = m.hitTest(e.clientX, e.clientY), a = agents.find((x) => x.id === id);
+      label.style.display = a ? "block" : "none";
+      if (a) { label.textContent = a.program + " · " + a.state; label.style.left = e.clientX + 14 + "px"; label.style.top = e.clientY - 26 + "px"; }
+    });
+  }
   const info = document.getElementById("info");
   const b = await m.backend();
   setInterval(async () => { const s = await m.stats(); info.textContent = b + " · " + m.thread + " · " + s.cells + " cells · " + s.ms.toFixed(2) + " ms"; }, 500);

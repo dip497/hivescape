@@ -18,6 +18,8 @@ export interface Layers {
   backdrop: AnyCanvas;
   /** The cells and the overlay. Takes a WebGL2 or a 2D context, whichever the machine is good at. */
   cells: AnyCanvas;
+  /** Over the cells: the scene's `front`, at full resolution. Optional. */
+  front?: AnyCanvas;
 }
 
 export interface RendererOptions {
@@ -37,6 +39,8 @@ export class Renderer {
   private picture: AnyCanvas;
   private pg: Ctx2D;
   private bg: Ctx2D;
+  private fg: Ctx2D | null;
+  private frontDrawn = false;
   private light: AnyCanvas;
   private lg: Ctx2D;
   private overlay = new OverlayBatch();
@@ -56,6 +60,7 @@ export class Renderer {
     this.picture = offscreen(1, 1);
     this.pg = ctx2d(this.picture, backend.readsPicture ? { willReadFrequently: true } : undefined);
     this.bg = ctx2d(layers.backdrop);
+    this.fg = layers.front ? ctx2d(layers.front) : null;
     this.light = offscreen(1, 1);
     this.lg = ctx2d(this.light, backend.readsPicture ? { willReadFrequently: true } : undefined);
     this.overlayApi = {
@@ -90,8 +95,11 @@ export class Renderer {
     const lw = this.grid.cols * LS, lh = this.grid.rows * LS;
     if (this.light.width !== lw || this.light.height !== lh) { this.light.width = lw; this.light.height = lh; }
     const bw = Math.max(1, Math.round(size.w * size.dpr)), bh = Math.max(1, Math.round(size.h * size.dpr));
-    if (this.layers.backdrop.width !== bw) this.layers.backdrop.width = bw;
-    if (this.layers.backdrop.height !== bh) this.layers.backdrop.height = bh;
+    for (const c of [this.layers.backdrop, this.layers.front]) {
+      if (!c) continue;
+      if (c.width !== bw) c.width = bw;
+      if (c.height !== bh) c.height = bh;
+    }
     this.backend.resize(size.w, size.h, size.dpr);
     this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "ascii" ? 0.82 : 0.6);
     this.ramp = this.atlas.slots(style.ramp || " ");
@@ -140,6 +148,14 @@ export class Renderer {
     }
     this.overlay.clear();
     scene.overlay?.(state, this.overlayApi, world);
+    const fg = this.fg;
+    if (fg && (scene.front || this.frontDrawn)) {
+      fg.setTransform(1, 0, 0, 1, 0, 0);
+      fg.clearRect(0, 0, fg.canvas.width, fg.canvas.height);
+      fg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      scene.front?.(state, fg, world);
+      this.frontDrawn = !!scene.front;
+    }
     const p = world.input.pointer;
     this.backend.draw({
       picture: this.picture, grid: this.grid, style: this.style, look: world.look, time: world.time,

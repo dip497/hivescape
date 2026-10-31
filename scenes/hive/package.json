@@ -1,0 +1,9 @@
+{
+  "name": "@hivescape/scene-hive",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "The Hive: a honeycomb where each agent is a bee. Its cells fill with honey as its turns finish, and a bee whose agent needs you dances beside its tile.",
+  "exports": { ".": "./src/index.ts" },
+  "hivescape": { "name": "The Hive", "description": "A honeycomb where each agent is a bee: honey fills its cells as turns finish, and a bee whose agent needs you dances beside its tile." }
+}

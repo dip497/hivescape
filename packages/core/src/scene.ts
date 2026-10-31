@@ -73,6 +73,28 @@ export interface StyleSpec {
   flicker: number;
 }
 
+/** What an agent is doing: at work, ready for a task, waiting on the person, or stopped or asleep. */
+export type AgentState = "working" | "ready" | "needs-you" | "resting";
+
+/** One of the person's agents, as a scene may show it: a creature of its own. */
+export interface Agent {
+  /** Opaque and stable until the agent's tile closes. Name the creature by it in `spots`. */
+  id: string;
+  /** The program ("claude", "codex" …), or null. */
+  program: string | null;
+  /** 0..1, the same for every agent of one program: all of one program are one kind of creature. */
+  kind: number;
+  /** About 0.78..1, the same for this agent every time. */
+  size: number;
+  state: AgentState;
+}
+
+/** Something solid over the scene, in CSS pixels: a tile (`id` names its agent) or a panel. */
+export interface Tile { x0: number; y0: number; x1: number; y1: number; id?: string }
+
+/** Where a creature is, for the pointer: a circle. A creature may be several (a long body). */
+export interface Spot { id: string; x: number; y: number; r: number }
+
 /** Everything a scene may read while it builds, steps and paints. */
 export interface World {
   size: Size;
@@ -83,6 +105,10 @@ export interface World {
   rng: Rng;
   input: Input;
   effects: Effects;
+  /** The person's agents, at most eight; none when the host has none to tell. */
+  agents: readonly Agent[];
+  /** Where the tiles and panels are: keep creatures out from under them, and go beside an agent's own. */
+  tiles: readonly Tile[];
 }
 
 export type Paint = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -122,8 +148,19 @@ export interface Scene<S = unknown> {
    */
   light?(s: S, g: Paint, w: World): void;
   overlay?(s: S, o: Overlay, w: World): void;
+  /**
+   * Creatures at full resolution, over the cells, in CSS pixels: what must stay crisp in any style
+   * (an agent's creature, its dance). Optional; unlit, so paint its own shading and shadow. A scene
+   * that wants its creatures to be cells too (the ascii style) paints them in `picture` instead.
+   */
+  front?(s: S, g: Paint, w: World): void;
   /** For a still frame: put everything where it would be after a while (default: 6 s of steps). */
   settle?(s: S, w: World): void;
+  /** An agent finished a turn well: a moment worth showing. (Its state changes arrive in `w.agents`.) */
+  done?(s: S, id: string, w: World): void;
+  /** Where each agent's creature is now, so the host can name the agent under the pointer and take a
+   *  click there to its tile. Read after each frame; only ids from `w.agents`. */
+  spots?(s: S, w: World): readonly Spot[];
 }
 
 export const defineScene = <S>(scene: Scene<S>): Scene<S> => scene;

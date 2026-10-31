@@ -11,6 +11,8 @@ runs in a page, a worker or a Hivemind wallpaper without knowing which.
  picture()   ──every frame──▶ picture canvas, 4×4 samples a cell ──┐
  light()     ──every frame──▶ light canvas, 2×2 samples a cell ────┼──▶ backend ──▶ cells canvas (WebGL2 or 2D)
  overlay()   ──every frame──▶ marks: characters and dots ──────────┘
+ front()     ──every frame───────────────────────────────────────────▶  front canvas (2D, full resolution)
+ spots()     ──after each frame──▶ where each agent's creature is ──▶  the host's hit test
 ```
 
 ## The scene
@@ -29,6 +31,21 @@ runs in a page, a worker or a Hivemind wallpaper without knowing which.
 `world` carries the size, the look (dark or light, and the host's page, text and accent colours),
 the resolved style, the scene's own time, a seeded `rng`, the pointer (position, smoothed speed and
 how long it has rested) and short-lived effects (ripples).
+
+## Agents
+
+`world.agents` lists the person's agents (at most eight): an opaque `id`, the `program`, a `kind`
+(0..1, the same for every agent of one program, so one program is one kind of creature), a `size`
+and a `state` (`working`, `ready`, `needs-you`, `resting`). `world.tiles` says where the tiles and
+panels are, an agent's own tile named by its id. `done(s, id)` is called when an agent finishes a
+turn well. `spots(s)` answers, after each frame, where each agent's creature is (circles); the host
+keeps the latest and answers its hit test from them at once, on its own thread, even when the scene
+runs in a worker. In Hivemind, that is how the app names the agent under the pointer and takes a
+click there to its tile.
+
+A creature that must stay crisp (an agent's, whose state matters) is painted in `front`, over the
+cells at full resolution; the world around it stays cells. In ascii a scene paints its creatures in
+`picture` instead, so they are characters too.
 
 ## Views
 

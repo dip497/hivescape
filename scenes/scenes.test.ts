@@ -3,6 +3,7 @@ import { LIGHT, simulate } from "@hivescape/core";
 import koi from "./koi/src/index.ts";
 import campfire from "./campfire/src/index.ts";
 import apiary, { viewOf } from "./apiary/src/index.ts";
+import hive from "./hive/src/index.ts";
 
 type KoiState = ReturnType<typeof koi.create>;
 type CampState = ReturnType<typeof campfire.create>;
@@ -89,5 +90,75 @@ describe("Apiary", () => {
     const iso = viewOf(sim.world), t = [...s.tiles.values()][0]!, p = iso.toScreen(t.x + 0.5, t.y + 0.5, t.z);
     for (let i = 0; i < 100; i++) { sim.click(p.x, p.y); sim.run(0.1); }
     expect(s.patches.length).toBeLessThanOrEqual(16);
+  });
+});
+
+describe("The Hive", () => {
+  type HiveState = ReturnType<typeof hive.create>;
+  const P = ["claude", "codex", "gemini", "claude", "amp"], S = ["working", "needs-you", "ready", "working", "resting"] as const;
+  const K: Record<string, number> = { claude: 0.1, codex: 0.35, gemini: 0.6, amp: 0.85 };
+  const agents = (states: readonly (typeof S)[number][] = S) => states.map((st, i) => ({ id: "agent-" + (i + 1), program: P[i]!, kind: K[P[i]!]!, size: 0.9, state: st }));
+  const TILES = [{ x0: 432, y0: 180, x1: 806, y1: 450, id: "agent-1" }, { x0: 835, y0: 144, x1: 1181, y1: 378, id: "agent-2" }, { x0: 518, y0: 504, x1: 950, y1: 756, id: "agent-3" }];
+  const under = (x: number, y: number) => TILES.some((t) => x > t.x0 && x < t.x1 && y > t.y0 && y < t.y1);
+
+  test("a bee for each agent, named only by agents' ids, and worker bees with no agents at all", () => {
+    const sim = simulate(hive);
+    sim.run(0.5);
+    expect((sim.state as HiveState).bees.length).toBe(0);
+    expect((sim.state as HiveState).workers.length).toBeGreaterThan(5);
+    sim.agents(agents()); sim.run(0.5);
+    const spots = hive.spots!(sim.state as HiveState, sim.world);
+    expect(spots.map((p) => p.id).sort()).toEqual(agents().map((a) => a.id).sort());
+    sim.agents(agents().slice(0, 2)); sim.run(0.1);
+    expect((sim.state as HiveState).bees.map((b) => b.id)).toEqual(["agent-1", "agent-2"]);
+  });
+
+  test("the bee whose agent needs you goes beside that agent's tile, not under any tile, and dances there", () => {
+    const sim = simulate(hive);
+    sim.agents(agents()); sim.tiles(TILES);
+    sim.run(6);
+    const b = (sim.state as HiveState).bees[1]!, t = TILES[1]!;
+    const near = Math.min(Math.abs(b.x - t.x0), Math.abs(b.x - t.x1), Math.abs(b.y - t.y0), Math.abs(b.y - t.y1));
+    let away = 0;
+    for (let k = 0; k < 300; k++) { sim.run(1 / 60); const c = (sim.state as HiveState).bees[1]!; if (under(c.x, c.y)) away++; }
+    expect(b.phase).toBe("dance");
+    expect(near).toBeLessThan(160);
+    expect(away).toBe(0);
+  });
+
+  test("bees at work fly round the tiles, not under them", () => {
+    let under_ = 0, seen = 0;
+    for (const seed of [1, 2, 3]) {
+      const sim = simulate(hive, { seed });
+      sim.agents(agents(["working", "working", "working", "working", "working"])); sim.tiles(TILES);
+      for (let k = 0; k < 60 * 40; k++) {
+        sim.run(1 / 60);
+        if (k % 6) continue;
+        for (const b of (sim.state as HiveState).bees) { seen++; if (TILES.some((t) => b.x > t.x0 + 12 && b.x < t.x1 - 12 && b.y > t.y0 + 12 && b.y < t.y1 - 12)) under_++; }
+      }
+    }
+    expect(under_ / seen).toBeLessThan(0.02);
+  });
+
+  test("a finished turn fills another of that agent's cells with honey; a stranger's id does nothing", () => {
+    const sim = simulate(hive);
+    sim.agents(agents()); sim.run(0.2);
+    const s = sim.state as HiveState, before = s.bees[0]!.turns;
+    sim.done("agent-1"); sim.done("agent-1"); sim.done("nobody"); sim.run(0.1);
+    expect(s.bees[0]!.turns).toBe(before + 2);
+    expect(s.bees[1]!.turns).toBe(s.bees[1]!.turns);
+    expect(s.sparks.length).toBeGreaterThan(0);
+  });
+
+  test("a resting agent's bee is in its cell, and an hour of turns and clicks stays bounded", () => {
+    const sim = simulate(hive);
+    sim.agents(agents()); sim.tiles(TILES);
+    sim.run(8);
+    const s = sim.state as HiveState, rest = s.bees[4]!, home = s.comb[rest.home[0]!]!;
+    expect(rest.phase).toBe("cell");
+    expect(Math.hypot(rest.x - home.x, rest.y - home.y)).toBeLessThan(8);
+    for (let m = 0; m < 60; m++) { for (let c = 0; c < 6; c++) { sim.click(200 + c * 150, 300); sim.done("agent-1"); } sim.run(60); }
+    expect(s.sparks.length).toBeLessThanOrEqual(160);
+    for (const b of [...s.bees, ...s.workers]) expect(Number.isFinite(b.x) && Number.isFinite(b.y)).toBe(true);
   });
 });

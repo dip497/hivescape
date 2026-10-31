@@ -5,7 +5,7 @@
 import { Effects } from "./effects.js";
 import { Input } from "./input.js";
 import { rng } from "./random.js";
-import { DARK, type Look, type Scene, type Size, type StyleSpec, type World } from "./scene.js";
+import { DARK, type Agent, type Look, type Scene, type Size, type StyleSpec, type Tile, type World } from "./scene.js";
 import { resolveStyle } from "./style.js";
 
 export interface Simulation<S> {
@@ -16,6 +16,11 @@ export interface Simulation<S> {
   point(x: number, y: number, active?: boolean): void;
   click(x: number, y: number): void;
   resize(w: number, h: number): void;
+  /** The host says which agents there are and what each is doing. */
+  agents(a: readonly Agent[]): void;
+  tiles(t: readonly Tile[]): void;
+  /** The host says an agent finished a turn well. */
+  done(id: string): void;
 }
 
 export interface SimulateOptions {
@@ -36,6 +41,8 @@ export function simulate<S>(scene: Scene<S>, opts: SimulateOptions = {}): Simula
     rng: rng(opts.seed ?? 1),
     input: new Input(),
     effects: new Effects(),
+    agents: [],
+    tiles: [],
   };
   const dt = opts.step ?? 1 / 60;
   let state = scene.create(world);
@@ -52,6 +59,9 @@ export function simulate<S>(scene: Scene<S>, opts: SimulateOptions = {}): Simula
     run(seconds) { for (let i = 0, n = Math.round(seconds / dt); i < n; i++) one(); },
     point(x, y, active = true) { world.input.point(x, y, active); },
     click(x, y) { world.input.click(x, y); },
+    agents(a) { world.agents = a; },
+    tiles(t) { world.tiles = t; },
+    done(id) { if (world.agents.some((a) => a.id === id)) scene.done?.(state, id, world); },
     resize(w, h) {
       world.size = { ...world.size, w, h };
       if (scene.resize) scene.resize(state, world);

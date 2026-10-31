@@ -59,7 +59,24 @@ facing it. Do not paint highlights into the picture; the bevels make them.
 - `picture`: the subjects, every frame. Draw back to front (`iso.depth`, or depth-sorted layers).
 - `overlay`: `dot()` for embers, stars, fireflies, bees, glints; `glyph()` only for real text.
 
-## 5. Motion and interaction
+## 5. Agents as creatures
+
+If the scene shows the person's agents, it is the most useful thing on the screen; make it read at
+a glance. Read `w.agents` each step and keep one creature per agent (add, remove, keep by id).
+
+- **A kind per program** from `agent.kind`; a size from `agent.size`.
+- **Each state looks different** in place, speed and light: working busy and out in the open,
+  ready close by and calm, resting tucked away and dim, and **needs-you** at its agent's tile
+  (`w.tiles.find(t => t.id === agent.id)`), on the side with room, doing something nothing else
+  does, in the theme's attention colour (`w.look.accent`). Nobody may miss it.
+- **A finished turn** (`done`) leaves a mark that lasts (honey in a cell), not only a flash.
+- **Keep off the tiles**: targets outside them, and steer by looking half a second ahead.
+- **Paint the creatures in `front`** (crisp over the cells), or in `picture` for ascii.
+- **`spots`** returns a circle or a few per creature, so the host can name it under the pointer.
+- Test with `sim.agents(...)`, `sim.tiles(...)`, `sim.done(id)`: the visit, the honey, the time
+  spent under tiles. Preview with `?agents=5&tiles=1`, shoot with `--agents 5`.
+
+## 6. Motion and interaction
 
 - Full from the first frame: `create` lays everything out; nothing flies in.
 - Calm: speeds in tens of pixels a second; things wander toward targets and retarget every few
@@ -70,18 +87,18 @@ facing it. Do not paint highlights into the picture; the bevels make them.
   lasts (food, a log on the fire, flowers planted).
 - Bounded: cap every list (sparks, food, patches). An hour of clicking costs what a minute does.
 
-## 6. Both looks
+## 7. Both looks
 
 Every scene has a dark and a light look (`w.look.dark`), designed separately: night and day, or
 night and dusk. Keep the light look's shadows soft (`shadowAlpha` about 0.2) and its glow low.
 
-## 7. Cost
+## 8. Cost
 
 Paint is the frame's cost. Keep per-frame gradients to tens, not hundreds; build paths once where
 you can; never read pixels back. Check with `hivescape bench`: under 20 ms of script a frame on
 Canvas2D at 1440 x 900 (`docs/performance.md`).
 
-## 8. Tests
+## 9. Tests
 
 Write scene tests with `simulate()` in `scenes/scenes.test.ts`: full on the first frame, the
 pointer and click behaviours, and bounded after an hour of clicks. Break each behaviour once and

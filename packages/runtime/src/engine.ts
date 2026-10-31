@@ -5,7 +5,7 @@
  */
 import {
   clock, Effects, Input, resolveStyle, rng,
-  type Clock, type Frames, type Look, type Mode, type Scene, type Size, type StyleSpec, type World,
+  type Agent, type Clock, type Frames, type Look, type Mode, type Scene, type Size, type Spot, type StyleSpec, type Tile, type World,
 } from "@hivescape/core";
 import { Renderer, type BackendChoice, type Layers } from "@hivescape/render";
 
@@ -34,12 +34,14 @@ export class Engine<S> {
   private frames = 0;
   /** Called once, after the first frame is on the layers. */
   onDrawn: (() => void) | null = null;
+  /** Called after each frame with where the agents' creatures are (scenes that show agents). */
+  onSpots: ((spots: readonly Spot[]) => void) | null = null;
 
   private constructor(private scene: Scene<S>, readonly renderer: Renderer, start: EngineStart, opts: EngineOptions) {
     this.override = opts.style ?? {};
     this.world = {
       size: start.size, look: start.look, style: resolveStyle(scene.style, start.look, this.override),
-      time: 0, rng: rng(opts.seed ?? 1), input: new Input(), effects: new Effects(),
+      time: 0, rng: rng(opts.seed ?? 1), input: new Input(), effects: new Effects(), agents: [], tiles: [],
     };
     renderer.configure(this.world.size, this.world.style);
     this.state = scene.create(this.world);
@@ -69,6 +71,10 @@ export class Engine<S> {
   private draw(): void {
     this.renderer.frame(this.scene, this.state, this.world);
     this.frames++;
+    if (this.onSpots && this.scene.spots) {
+      const known = new Set(this.world.agents.map((a) => a.id));
+      this.onSpots(this.scene.spots(this.state, this.world).filter((p) => known.has(p.id)));
+    }
     if (!this.drawnOnce) { this.drawnOnce = true; this.onDrawn?.(); }
   }
 
@@ -102,6 +108,16 @@ export class Engine<S> {
   }
 
   setMode(mode: Mode): void { this.clock.setMode(mode); }
+
+  /** The agents and what each is doing. A still scene draws again to show the change. */
+  setAgents(agents: readonly Agent[]): void { this.world.agents = agents; this.clock.changed(); }
+
+  setTiles(tiles: readonly Tile[]): void { this.world.tiles = tiles; this.clock.changed(); }
+
+  /** An agent finished a turn well. Heard only while running, as clicks are. */
+  done(id: string): void {
+    if (this.clock.mode === "run" && this.world.agents.some((a) => a.id === id)) this.scene.done?.(this.state, id, this.world);
+  }
 
   /** Pointer and clicks are heard only while running: a held or still scene does not react. */
   point(x: number, y: number, active = true): void {
