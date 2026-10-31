@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { simulate } from "@hivescape/core";
-import { blurAt, cameraAt, depthAt, flowPhases, FLOW_CYCLE, layerRect, levelsFilter, overscan, place, type Camera } from "../src/index.ts";
+import { blurAt, depthAt, flowPhases, FLOW_CYCLE, levelsFilter, place, shimmerAt, swayAt } from "../src/index.ts";
 import suddenShower from "../../../scenes/sudden-shower/src/index.ts";
-import lakshmi from "../../../scenes/lakshmi/src/index.ts";
 
 type State = ReturnType<typeof suddenShower.create>;
 
@@ -45,16 +44,7 @@ describe("effects", () => {
     sim.run(3600);
     const drops = (sim.state as State).drops.flat();
     expect(drops.length).toBe(n);
-    // The rain's region is the picture's, which the camera's overscan carries a little past each edge.
-    for (const d of drops) expect(d.y > -250 && d.y < 1150 && d.x > -250 && d.x < 1690).toBe(true);
-  });
-  test("petals keep falling through the painting rather than piling up at its foot", () => {
-    const sim = simulate(lakshmi, { seed: 4 });
-    sim.run(600);
-    const flakes = (sim.state as State).flakes.flat();
-    expect(flakes.length).toBeGreaterThan(0);
-    const low = flakes.filter((f) => f.y > 850).length;
-    expect(low).toBeLessThan(flakes.length / 2);
+    for (const d of drops) expect(d.y > -100 && d.y < 1000 && d.x > -60 && d.x < 1500).toBe(true);
   });
 });
 
@@ -73,29 +63,47 @@ describe("depth", () => {
   });
 });
 
-describe("camera", () => {
-  const c: Required<Camera> = { drift: 0.035, period: 26, zoom: 0.04, lean: 0.6, pivot: 0.5 };
-  const W = 1440, H = 900, p = place({ width: 1024, height: 755 }, { focus: [0.5, 0.5] }, W, H), over = overscan(c);
-  test("whatever the camera does, every layer covers the whole screen", () => {
-    for (let t = 0; t < 120; t += 0.37) for (const [lx, ly] of [[0, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]] as const) for (const z of [0, 0.25, 0.5, 0.75, 1]) {
-      const r = layerRect(p, cameraAt(c, t, lx, ly, W, H), c, z, W, H, over);
-      expect(r.x).toBeLessThanOrEqual(0);
-      expect(r.y).toBeLessThanOrEqual(0);
-      expect(r.x + r.w).toBeGreaterThanOrEqual(W);
-      expect(r.y + r.h).toBeGreaterThanOrEqual(H);
+describe("wind", () => {
+  test("a field in the wind bends in place: no patch ever moves further than its sway", () => {
+    for (let t = 0; t < 60; t += 0.13) for (let i = 0; i < 12; i++) for (let j = 0; j < 6; j++) {
+      const [dx, dy] = swayAt(t, i, j, i / 12, 2.5);
+      expect(Math.abs(dx)).toBeLessThanOrEqual(2.5);
+      expect(Math.abs(dy)).toBeLessThanOrEqual(2.5);
     }
   });
-  test("near layers slide against far ones as the camera orbits, and the depth at the pivot stays put", () => {
-    const at = (t: number, z: number) => layerRect(p, cameraAt(c, t, 0, 0, W, H), c, z, W, H, over).x;
-    const quarter = c.period / 4, still = at(0, 0.5);
-    expect(at(quarter, 1) - at(0, 1)).toBeLessThan(-20);
-    expect(at(quarter, 0) - at(0, 0)).toBeGreaterThan(20);
-    // At the pivot only the breathing moves it, a little.
-    expect(Math.abs(at(quarter, 0.5) - still)).toBeLessThan(Math.abs(at(quarter, 1) - at(0, 1)) / 4);
+  test("neighbouring patches move on their own beats, so the field ripples rather than sliding as one", () => {
+    // At any moment, lull or gust, some patches of a row lean one way while others lean the other.
+    for (let t = 0; t < 30; t += 0.7) {
+      const xs = Array.from({ length: 20 }, (_, i) => swayAt(t, i, 3, 0.4, 2)[0]);
+      expect(xs.some((v) => v > 0) && xs.some((v) => v < 0)).toBe(true);
+    }
   });
-  test("the camera leans toward the pointer", () => {
-    expect(cameraAt(c, 0, 1, 0, W, H).x).toBeGreaterThan(cameraAt(c, 0, 0, 0, W, H).x + 20);
-    expect(cameraAt(c, 0, 0, 1, W, H).y).toBeGreaterThan(cameraAt(c, 0, 0, 0, W, H).y + 5);
+  test("a gust's band of light sweeps across the field: lit where it is, not where it has not reached", () => {
+    // At one moment, patches along a row: the band is somewhere, so some are lit well above the flutter.
+    const row = (t: number) => Array.from({ length: 60 }, (_, i) => shimmerAt(t, i, 2, i / 60, 0.3));
+    for (const t of [0.5, 2, 4.5]) {
+      const xs = row(t);
+      expect(Math.max(...xs)).toBeGreaterThan(0.15);
+      expect(Math.min(...xs)).toBeLessThan(0.1);
+    }
+    // The band moves: where it is brightest shifts as time passes.
+    const peak = (t: number) => { const xs = row(t); return xs.indexOf(Math.max(...xs)); };
+    expect(peak(0.5)).not.toBe(peak(1.5));
+  });
+  test("the light stays within its strength, and each patch flutters on its own", () => {
+    for (let t = 0; t < 20; t += 0.11) for (let i = 0; i < 10; i++) {
+      const v = shimmerAt(t, i, 1, i / 10, 0.3);
+      expect(v).toBeLessThanOrEqual(0.3 + 1e-9);
+      expect(v).toBeGreaterThanOrEqual(-0.12 - 1e-9);
+    }
+    // Two neighbours out of the gust's band do not flicker together.
+    const a = Array.from({ length: 30 }, (_, k) => shimmerAt(3.6 + k * 0.05, 4, 1, 0.05, 0.3));
+    const b = Array.from({ length: 30 }, (_, k) => shimmerAt(3.6 + k * 0.05, 5, 1, 0.05, 0.3));
+    expect(a.some((v, k) => Math.abs(v - b[k]!) > 0.02)).toBe(true);
+  });
+  test("each patch keeps moving: it is wind, not a still offset", () => {
+    const xs = Array.from({ length: 40 }, (_, k) => swayAt(k * 0.25, 5, 2, 0.3, 2)[0]);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(1.5);
   });
 });
 

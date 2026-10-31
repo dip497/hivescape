@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
-  "description": "Lakshmi in her halo, after the Calcutta Art Studio print of 1883, alive: the halo breathes, the wheat stirs, petals fall.",
+  "description": "Lakshmi in her halo, after the Calcutta Art Studio print of 1883, alive: the halo breathes, the wheat and the tree stir in the wind.",
   "exports": {
     ".": "./src/index.ts"
   },
   "hivescape": {
     "name": "Lakshmi",
-    "description": "Lakshmi in her halo, after the Calcutta Art Studio print of 1883, alive: the halo breathes, the wheat stirs, petals fall.",
+    "description": "Lakshmi in her halo, after the Calcutta Art Studio print of 1883, alive: the halo breathes, the wheat and the tree stir in the wind.",
     "credit": "Lakshmi, designed and published by the Calcutta Art Studio, Kolkata, 1883. Lithograph with black ink, watercolour and glaze on paper. The Metropolitan Museum of Art (2021.202), Open Access, CC0."
   }
 }

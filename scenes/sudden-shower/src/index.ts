@@ -13,7 +13,8 @@ export default defineMasterwork({
   image,
   crop: [0.095, 0.07, 0.91, 0.93],
   focus: [0.5, 0.52],
-  // The far shore and the sky far off, the river running nearer, the bridge and its walkers nearest.
+  // For the depth of field: the far shore and the sky far off, the river running nearer, the bridge
+  // and its walkers nearest, in focus. They hold still; the rain and the river move.
   depth: {
     horizon: 0.34, far: 0.2, near: 0.7,
     shapes: [

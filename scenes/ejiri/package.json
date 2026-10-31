@@ -1,0 +1,15 @@
+{
+  "name": "@hivescape/scene-ejiri",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Hokusai's gale at Ejiri (about 1830), alive: the wind runs through the rice fields and the trees and tosses the papers, the travellers and Fuji still.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "hivescape": {
+    "name": "Ejiri",
+    "description": "Hokusai's gale at Ejiri (about 1830), alive: the wind runs through the rice fields and the trees and tosses the papers, the travellers and Fuji still.",
+    "credit": "Katsushika Hokusai, Ejiri in Suruga Province (Sunshū Ejiri), from the series Thirty-six Views of Mount Fuji, about 1830-32. Woodblock print, ink and colour on paper. The Metropolitan Museum of Art (JP12), Rogers Fund, 1914, Open Access, CC0."
+  }
+}

@@ -47,7 +47,11 @@ importers:
 
   scenes/campfire: {}
 
+  scenes/ejiri: {}
+
   scenes/garden: {}
+
+  scenes/gedres: {}
 
   scenes/harvest: {}
 

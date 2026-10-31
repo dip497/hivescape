@@ -1,16 +1,19 @@
 ---
 name: hivescape-living-picture
-description: Turn a photograph or a painting into a living Hivescape scene in the ink style - cut into depth layers that a slow camera orbits (near things sliding across far ones, depth of field), water and cloud that flow, wind, rain, mist, birds - then film it, review it and ship it as a Hivemind wallpaper. Use when someone gives a picture ("make my village photo move", "this painting as a wallpaper"), asks for a scene in a tradition's own art (a deity, a woodblock print, an ink landscape), or says a picture scene looks static or flat.
+description: Turn a photograph or a painting into a living Hivescape scene in the ink style that moves only where the picture itself would - water that flows, grass and leaves bending in the wind, rain, mist, a breathing light - while buildings, figures and the camera hold still; then film it, check its motion map, and ship it as a Hivemind wallpaper. Use when someone gives a picture ("make my village photo move", "this painting as a wallpaper"), asks for a scene in a tradition's own art (a deity, a woodblock print, an ink landscape), or says a picture scene looks static, busy or overanimated.
 ---
 
 # A living picture
 
 `defineMasterwork` (`@hivescape/paintings`) makes any picture a scene. What makes one stop people is
-**motion through depth**, not effects on a flat picture: the picture is cut into layers by how far each
-part is, a slow camera orbits it, near things slide across far ones, and in `ink` the picture moves
-under a fixed grid of characters, so every character keeps changing and the frame seems to pour.
-Water flows where the picture has water. You describe all of it in the picture's own fractions
-(0..1 across and down, after `crop`), so it holds on any screen.
+**contrast between stillness and motion**: the camera, the buildings, the bridge, the figures, a
+deity hold perfectly still and crisp, while the things that move in life move in place: water flows,
+grass and leaves bend in the wind, rain falls, mist drifts. In `ink` a moving region flips its
+characters in place against still ones. (Measured on the ASCII-shader video this style comes from:
+the torii moved under half a percent in 24 seconds; all the change was in the snow and grass.)
+
+Animate only what would move. Nothing decorative: no birds, falling petals or drifting mist that the
+picture doesn't have, no moving camera, nothing that slides.
 
 ## 1. The picture
 
@@ -20,11 +23,11 @@ Water flows where the picture has water. You describe all of it in the picture's
   then `/public/collection/v1/objects/<id>`. Use only a record with `isPublicDomain: true` and its
   `primaryImage`. Take the title, maker, date, medium and accession number from the record, never
   from memory, into `package.json` as `hivescape.credit`.
-- **Choose well**: wide, with large shapes and clear depth (a near thing, a middle, a far distance,
-  water). A cell is 7 x 13 px: a face needs about 12 cells across. A small old scan comes out as
-  blocks: find another. Leave out a work whose subject is unwelcome behind someone's work.
-- **Sacred images with respect**: whole and upright, nothing comic, no effect on the figure itself
-  except light (a halo that breathes).
+- **Choose well**: wide, with large shapes, and a large part of it that moves in life (a river or
+  falls, a field, trees, rain): a picture where only a corner moves makes a weak wallpaper. A cell is 7 x 13 px: a face needs about 12 cells across. A small old scan comes out
+  as blocks: find another. Leave out a work whose subject is unwelcome behind someone's work.
+- **Sacred images with respect**: whole, upright and still, nothing comic; at most a light that
+  breathes (a halo).
 - **Bundle it** at most 1400-1600 px on the long side, JPEG quality ~78-80, at `src/painting.jpg`
   (`import image from "./painting.jpg"`). It is in the wallpaper twice: keep it under ~400 KB.
 
@@ -37,60 +40,49 @@ python3 -c "from PIL import Image,ImageDraw;im=Image.open('src/painting.jpg');w,
 [d.line([(w*k/10,0),(w*k/10,h)],fill='red') or d.line([(0,h*k/10),(w,h*k/10)],fill='red') for k in range(1,10)];im.save('/tmp/grid.png')"
 ```
 
-Read off: the paper or mount to `crop` away, the point to keep in view (`focus`), where the ground
-meets the sky (`horizon`), each thing that stands up (its outline), and where the water is.
+Read off: the paper or mount to `crop` away, the point to keep in view (`focus`), and **what moves
+in life**: where the water is and which way it runs, which grass, crops or leaves the wind would
+touch, whether it rains or mist lies in it. Everything else will hold still.
 
-## 3. Depth
-
-```ts
-depth: {
-  horizon: 0.42,            // above this is the far distance (0)
-  far: 0.3, near: 1,        // the ground's depth at the horizon and at the picture's foot
-  shapes: [                 // things standing up, in order, the nearest LAST
-    { poly: [[0.6, 0.2], [0.8, 0.2], [0.8, 0.9], [0.6, 0.9]], z: 0.7 },
-  ],
-},
-sharp: { depth: 0.7, range: 0.25, blur: 2.5 },   // what is in focus; farther and nearer go soft
-```
-
-- 0 is the far distance (sky, far mountains), 1 the nearest thing. Most pictures need 2-5 shapes:
-  a far range, a middle mass (trees, a village), the subject, and a near foreground.
-- **Outline a little outside the thing**, not tight to it: a shape's edge is where a near thing
-  slides over a far one, and a shape that cuts through the subject tears it.
-- A tree, a figure or a bridge is one shape at one depth, from its foot to its top: never let the
-  ground's gradient run up a standing thing (its top would slide differently from its foot).
-- `sharp`: focus on the subject's depth. A strong blur on the far layers is the reference's
-  tilt-shift look; keep it under ~3 px on a painting whose distance is part of it.
-
-## 4. What moves
+## 3. What moves
 
 - **`flow`** for water and cloud: `{ kind: "flow", region: <outline or rectangle>, dir: [x, y], speed }`.
-  `dir` is the way it runs in the picture (a river toward the viewer is `[0.1, 1]`, across is
-  `[-1, 0]`); `speed` 0.003 (a still pond, far cloud) to 0.012 (rapids), picture widths a second.
-  Outline only the water.
-- `wind` on a field or trees; `rain`; `mist` in bands between hills; `birds` in open sky; `fall`
-  (petals, leaves, snow); `glow` on a lamp, a halo, the sun.
-- **`camera`**: the defaults (an orbit of ~22 s, drift 0.045) suit most pictures. Slower (`period`
-  30-40) for a quiet ink landscape; `camera: false` only for a picture with no depth at all.
+  `dir` is the way it runs in the picture (a river toward the viewer `[0.1, 1]`, across `[-1, 0]`);
+  `speed` 0.003 (a still pond, far cloud) to 0.012 (rapids), picture widths a second. Outline only
+  the water, inside its banks.
+- **`wind`** for grass, crops and leaves: `{ kind: "wind", region, amp, speed, shimmer }`. The region
+  sways in thin rows and waves of light sweep across it as gusts bend the blades, with each small
+  patch fluttering on its own: it bends in place, never slides. `amp` 2-3.5 pixels; `shimmer` 0.1
+  (far leaves, sky) to 0.4 (a field, the default); `speed` 0.6 (a breeze) to 1.6 (a gale).
+- **`except`** on `flow` and `wind`: outlines inside the region that hold still. Outline the field
+  or the river generously, then cut out every figure, rock, trunk or building standing in it; a
+  moving region must never touch something that would not move.
+- **`rain`** when the picture is of rain, **`mist`** in bands where the picture has mist,
+  **`glow`** on a lamp, a halo or the sun, with a small `pulse` (0.1-0.2).
 - **`levels`** 0.5-0.9 for a faded photograph or a darkened varnish: it stretches the tones once.
+- **`depth` and `sharp`** (optional): softens what is far from the subject, as a lens does, once:
+  `depth: { horizon, far, near, shapes: [{ poly, z }] }` (0 far, 1 nearest; things standing up as
+  outlines, nearest last) and `sharp: { depth: <the subject's>, range: 0.25, blur: 2.5 }`.
 
-## 5. Film it and look
+## 4. Film it and read its motion map
 
 Stills cannot show motion. Film it, every frame at its own time:
 
 ```bash
-node packages/cli/bin/hivescape.mjs film scenes/<id> --seconds 8 --backend webgl2 --webp   # out/films/<id>-dark.mp4 and .webp
+node packages/cli/bin/hivescape.mjs film scenes/<id> --seconds 8 --backend webgl2 --webp
+# out/films/<id>-dark.mp4, <id>-dark-motion.png, <id>-dark.webp
 ```
 
-Then take the same crop from frames a few seconds apart and put them side by side:
+The **motion map** is where the frame changes, on average: put it beside a frame and check:
 
-- [ ] Near things slide across far ones; the subject holds still in focus. Nothing tears through the
-      subject (an outline too tight) and nothing near is doubled (a ghost: report it, the layers fill
-      behind near things with the colours round them).
-- [ ] No screen edge, black corner or seam shows at any moment of the orbit.
-- [ ] The water runs the right way, at a believable speed, and stays in its banks.
+- [ ] Black over everything that should hold still: buildings, bridges, figures, the deity, the sky.
+- [ ] Light only on the water, the plants in the wind, the rain, the mist: what you meant to move.
+- [ ] Bright enough there to see from across the room. Where the reference's grass moves, a third of
+      its frame changes every frame; a sway that changes nothing on the map is too faint: raise
+      `shimmer` or `speed`, not the area.
+- [ ] In the film: water runs the right way at a believable speed and stays in its banks; the wind
+      bends things in place, nothing slides; nothing jerks; it is calm enough to work in front of.
 - [ ] The picture still reads from across the room: its main figure, its tones (`levels` if faded).
-- [ ] It is calm enough to work in front of: nothing jerks, nothing crosses the screen in a second.
 
 Then `hivescape-review` for both looks and the cost (`bench --kind ink`), and `hivescape-hivemind` to pack
 it (its credit goes into `CREDITS.txt`) and check it in Hivemind.

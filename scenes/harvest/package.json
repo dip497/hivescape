@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
-  "description": "Bruegel's The Harvesters (1565), alive: wind runs through the wheat, birds cross the summer sky.",
+  "description": "Bruegel's The Harvesters (1565), alive: the wind runs through the standing wheat and the pear tree, the reapers resting still.",
   "exports": {
     ".": "./src/index.ts"
   },
   "hivescape": {
     "name": "The Harvest",
-    "description": "Bruegel's The Harvesters (1565), alive: wind runs through the wheat, birds cross the summer sky.",
+    "description": "Bruegel's The Harvesters (1565), alive: the wind runs through the standing wheat and the pear tree, the reapers resting still.",
     "credit": "Pieter Bruegel the Elder, The Harvesters, 1565. Oil on oak. The Metropolitan Museum of Art (19.164), Open Access, CC0."
   }
 }

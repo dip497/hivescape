@@ -94,14 +94,15 @@ its tuning for its own kind.
     itself, edge to edge of the cell (`─ │ ╱ ╲`), so neighbours join into one unbroken line;
   - a seam under each row gives the scan lines of a screen.
 
-  `@hivescape/paintings` builds scenes for it from photographs and paintings. Once, when the picture
-  is decoded, it is cut into six layers by depth (a ground from the horizon to the foot, and shapes
-  standing up from it): each holds its band, blurred by its distance from the focus, and behind
-  nearer things the colours round them (push-pull filling), so a near thing the camera moves aside
-  leaves no second copy of itself. Each frame the layers are drawn far to near, each slid and grown
-  for its depth by a slow orbiting camera; only the part of a layer that has anything in it is
-  drawn. A flowing region is two copies of itself sliding along the flow and cross-fading, each
-  invisible at the moment it jumps back, kept inside its soft outline.
+  `@hivescape/paintings` builds scenes for it from photographs and paintings, which move only where
+  they would in life. The picture is composed once, when it is decoded: cropped, its tones stretched
+  if faded, and (with `sharp`) softened by depth, each of six depth bands blurred for its distance
+  from the focus. Each frame it is drawn whole and still; then each moving region is composed in a
+  scratch canvas the size of its box and kept inside its soft outline: a flow is two copies sliding
+  along the flow and cross-fading, each invisible at the moment it jumps back; wind is the region in
+  thin rows, each swaying a few pixels on its own beat, under its light: an image of one pixel a
+  patch (a gust's band sweeping across, and each patch's flutter), drawn scaled up and smooth in one
+  go. A region's `except` outlines are cut out of its mask, so what stands in it holds still.
 
 ## Light
 

@@ -1,19 +1,18 @@
 /**
- * Living pictures. A painting or a photograph becomes a scene that moves the way a camera moving
- * through it would. The picture is cut into layers by how far each part of it is (`depth`: a ground
- * running from the horizon to the viewer's feet, and the things that stand up from it), and a slow
- * camera orbits it: near layers slide across far ones, the picture breathes in and out, and it leans
- * a little toward the pointer. Parts far from the depth in focus go soft, as through a lens. Over
- * that, effects where the picture has them: water and cloud that flow (two copies of the region
- * drifting along its flow and cross-fading, as a cinemagraph does), wind through a field, rain, mist,
- * birds, falling petals or snow, lights that breathe. Drawn in the ink style the picture moves under
- * a fixed grid of characters, so every character keeps changing and the whole frame seems to pour.
+ * Living pictures. A painting or a photograph becomes a scene that moves only where the picture
+ * itself would: water flows, grass and leaves bend in the wind, rain falls, mist drifts, a lamp or a
+ * halo breathes. Everything else (the buildings, the bridge, the figures, the camera) holds still,
+ * and that stillness is what makes the moving parts read. Drawn in the ink style, a region that moves
+ * flips its characters in place while the rest stays crisp, as an ASCII shader over a still shot does.
  *
- * The picture comes with the scene, as base64 bytes in its bundle (a wallpaper may fetch nothing),
- * and is decoded and layered once. Its credit (title, maker, date, collection, licence) goes in the
- * scene's package.json as `hivescape.credit`, and `pack` writes it beside the wallpaper as
- * CREDITS.txt. Everything is placed in the picture's own fractions (0..1 across and down, after
- * `crop`), so an effect stays on the water whatever the screen's shape.
+ * Optionally the picture is softened by depth (`depth` and `sharp`): what is far from the depth in
+ * focus is blurred, as through a lens, once, when the picture is decoded.
+ *
+ * The picture comes with the scene, as base64 bytes in its bundle (a wallpaper may fetch nothing).
+ * Its credit (title, maker, date, collection, licence) goes in the scene's package.json as
+ * `hivescape.credit`, and `pack` writes it beside the wallpaper as CREDITS.txt. Everything is placed
+ * in the picture's own fractions (0..1 across and down, after `crop`), so an effect stays on the
+ * water whatever the screen's shape.
  */
 import { clamp, defineScene, hex, TAU, type Look, type Paint, type Rgb, type Scene, type StyleSpec } from "@hivescape/core";
 
@@ -35,36 +34,27 @@ export interface Depth {
   shapes?: readonly { poly: Outline; z: number }[];
 }
 
-/** The camera's slow orbit. */
-export interface Camera {
-  /** How far it drifts, a share of the screen (default 0.045). */
-  drift?: number;
-  /** Seconds for one orbit (default 22). */
-  period?: number;
-  /** How much nearer layers grow as it breathes in (default 0.06). */
-  zoom?: number;
-  /** How far it leans toward the pointer, a share of `drift` (default 0.4). */
-  lean?: number;
-  /** The depth that stays put: nearer layers slide one way, farther ones the other (default 0.5). */
-  pivot?: number;
-}
-
 /** Depth of field: the depth in focus, how far either side of it stays sharp, and the blur at the ends. */
 export interface Focus { depth: number; range?: number; blur?: number }
 
 export type Effect =
-  /** Water or cloud that flows along `dir` (a direction in the picture), `speed` picture widths a second. */
-  | { kind: "flow"; region: Region | Outline; dir: Point; speed?: number }
-  /** Wind through a field or trees: rows shifting in a wave that travels across. */
-  | { kind: "wind"; region: Region; amp?: number; speed?: number }
+  /**
+   * Water or cloud that flows along `dir` (a direction in the picture), `speed` picture widths a
+   * second. `except`: outlines inside the region that hold still (a rock in the river).
+   */
+  | { kind: "flow"; region: Region | Outline; dir: Point; speed?: number; except?: readonly Outline[] }
+  /**
+   * Grass, wheat or leaves in the wind, in place: small patches sway, and waves of light sweep across
+   * as gusts bend the blades (their paler side turning up), with a quick flutter of each patch on its
+   * own, so the characters keep changing. `amp` is the sway in pixels; `shimmer` how strongly the light
+   * changes (0..1, default 0.4).
+   * `except`: outlines inside the region that hold still (a figure standing in the field).
+   */
+  | { kind: "wind"; region: Region | Outline; amp?: number; speed?: number; shimmer?: number; except?: readonly Outline[] }
   /** Rain: streaks at `angle` (radians from straight down, positive leaning right). */
   | { kind: "rain"; count: number; angle: number; colour: string; alpha?: number; length?: number; speed?: number; region?: Region }
   /** Mist: soft bands drifting across, at heights given in the picture's fractions. */
   | { kind: "mist"; bands: readonly number[]; colour: string; alpha?: number; speed?: number }
-  /** Birds: small flocks crossing the sky region. */
-  | { kind: "birds"; count: number; region: Region; colour: string }
-  /** Falling things: petals, leaves, snow. */
-  | { kind: "fall"; count: number; region: Region; colours: readonly string[]; size?: number; speed?: number }
   /** A light that breathes, at a point of the picture: a lamp, a halo, the low sun. */
   | { kind: "glow"; at: Point; radius: number; colour: Rgb; alpha: number; pulse?: number };
 
@@ -79,13 +69,13 @@ export interface Masterwork {
   crop?: Region;
   /** The point of the picture (after `crop`) kept in view when the screen's shape cuts it, 0..1. */
   focus?: Point;
-  /** How far each part is. Without it the picture is one layer, and the camera only drifts and breathes. */
+  /** How far each part is, for `sharp`. */
   depth?: Depth;
-  camera?: Camera | false;
-  /** Depth of field (needs `depth`). */
+  /** Depth of field (needs `depth`): what is far from the depth in focus goes soft. */
   sharp?: Focus;
   /** Stretch the picture's tones toward the full range, 0 (as it is, the default) to 1 (fully): for a faded photograph. */
   levels?: number;
+  /** What moves, and only that: the rest holds still. */
   effects: readonly Effect[];
   style?: (look: Look) => Partial<StyleSpec>;
 }
@@ -103,7 +93,7 @@ export function place(img: { width: number; height: number }, m: { crop?: Region
 }
 
 /** Whether `x, y` is inside `poly` (even-odd). */
-function inside(poly: Outline, x: number, y: number): boolean {
+export function inside(poly: Outline, x: number, y: number): boolean {
   let hit = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const [xi, yi] = poly[i]!, [xj, yj] = poly[j]!;
@@ -121,80 +111,7 @@ export function depthAt(d: Depth, x: number, y: number): number {
   return far + ((near - far) * (y - d.horizon)) / Math.max(1e-6, 1 - d.horizon);
 }
 
-const CAMERA: Required<Camera> = { drift: 0.045, period: 22, zoom: 0.06, lean: 0.4, pivot: 0.5 };
-
-/** Where the camera is at time `t`, leaning `lx, ly` (-1..1) toward the pointer: its offset in CSS pixels, and how far it has breathed in (0..1). */
-export function cameraAt(c: Required<Camera>, t: number, lx: number, ly: number, W: number, H: number): { x: number; y: number; breath: number } {
-  const a = (TAU * t) / c.period;
-  return {
-    x: W * c.drift * (Math.sin(a) + c.lean * lx),
-    y: H * c.drift * 0.6 * (Math.sin(a * 0.73 + 1.1) + c.lean * ly),
-    breath: 0.5 - 0.5 * Math.cos(a * 0.61),
-  };
-}
-
-/**
- * How a layer at depth `z` is drawn: the picture's rectangle, grown round the screen's centre (more
- * for nearer layers as the camera breathes in, and enough for every layer to cover the screen at the
- * camera's farthest), and slid across the screen (nearer layers against the camera, farther with it).
- */
-export function layerRect(p: Placement, cam: { x: number; y: number; breath: number }, c: Required<Camera>, z: number, W: number, H: number, over: number) {
-  const s = over * (1 + c.zoom * cam.breath * z), k = (z - c.pivot) / 0.5;
-  return { x: W / 2 + (p.dx - W / 2) * s - cam.x * k, y: H / 2 + (p.dy - H / 2) * s - cam.y * k, w: p.dw * s, h: p.dh * s };
-}
-
-/** How much a camera's travel must grow the picture so no layer ever shows the screen's edge. */
-export const overscan = (c: Required<Camera>): number => 1 + (2.2 * c.drift * (1 + c.lean) * Math.max(c.pivot, 1 - c.pivot)) / 0.5;
-
-/** How many depth layers a picture is cut into. */
-const LAYERS = 6;
-/** The layers' width at most, in picture pixels: ink samples a 1440 px screen at about 820 points across. */
-const WORK = 1024;
-/** The depth map's width: its masks are scaled up, which also softens the layers' edges. */
-const MASK = 320;
-
-interface Drop { x: number; y: number; v: number; len: number }
-interface Flake { x: number; y: number; vx: number; vy: number; r: number; c: string; spin: number }
-interface Bird { x: number; y: number; v: number; phase: number; flock: number }
-type Canvas = OffscreenCanvas;
-type Ctx = OffscreenCanvasRenderingContext2D;
-type Rect = { x: number; y: number; w: number; h: number };
-
-interface Built {
-  /** The picture, cropped, at work size. */
-  w: number; h: number;
-  /** Layer k holds everything at least as near as its band, blurred for its distance from focus. */
-  layers: Canvas[];
-  /** The part of each layer that has anything in it, in work pixels: only that is drawn. */
-  boxes: Rect[];
-  /** Each flow's soft outline, at mask size, and the part of the picture it covers (fractions). */
-  flows: (Canvas | null)[];
-  flowBoxes: (Region | null)[];
-  /** A scratch canvas the size of the picture layer, for composing a flow. */
-  scratch: Canvas | null;
-}
-
-interface State {
-  built: Built | null;
-  t: number;
-  lean: { x: number; y: number };
-  drops: Drop[][];
-  flakes: Flake[][];
-  birds: Bird[][];
-}
-
-function decode(b64: string, mime: string): Promise<ImageBitmap> | null {
-  if (typeof createImageBitmap !== "function" || typeof atob !== "function" || typeof OffscreenCanvas === "undefined") return null;
-  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-  return createImageBitmap(new Blob([bytes], { type: mime }));
-}
-
-const ctxOf = (c: Canvas): Ctx => c.getContext("2d") as Ctx;
-const outlineOf = (r: Region | Outline): Outline =>
-  typeof r[0] === "number" ? (([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] as Outline)(r as Region) : (r as Outline);
-const centreOf = (o: Outline): Point => [o.reduce((a, p) => a + p[0], 0) / o.length, o.reduce((a, p) => a + p[1], 0) / o.length];
-
-/** The blur, in work pixels, of a layer at depth `z`: none within `range` of the depth in focus, rising to `blur` beyond. */
+/** The blur, in work pixels, at depth `z`: none within `range` of the depth in focus, rising to `blur` beyond. */
 export function blurAt(f: Focus | undefined, z: number): number {
   if (!f) return 0;
   const range = f.range ?? 0.2, off = Math.max(0, Math.abs(z - f.depth) - range) / Math.max(0.05, 1 - range);
@@ -210,6 +127,84 @@ export function levelsFilter(lo: number, hi: number, amount: number): string {
   return `brightness(${b.toFixed(4)}) contrast(${c.toFixed(4)})`;
 }
 
+/** How long one cross-fade of a flow takes, seconds: long enough that the drift reads, short enough that nothing smears. */
+export const FLOW_CYCLE = 4;
+
+/** The two copies of a flowing region at time `t`: how far each has slid along the flow (-0.5..0.5 of its travel) and how much of it shows. Each is invisible at the moment it jumps back. */
+export function flowPhases(t: number): [{ at: number; weight: number }, { at: number; weight: number }] {
+  const a = (((t / FLOW_CYCLE) % 1) + 1) % 1, b = (a + 0.5) % 1;
+  return [{ at: a - 0.5, weight: Math.sin(Math.PI * a) ** 2 }, { at: b - 0.5, weight: Math.sin(Math.PI * b) ** 2 }];
+}
+
+/** A fixed number 0..1 for patch `i, j`, so each patch of a field sways on its own beat. */
+const patchHash = (i: number, j: number): number => {
+  let h = (Math.imul(i, 0x27d4eb2d) ^ Math.imul(j, 0x165667b1)) >>> 0;
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d) >>> 0; h ^= h >>> 12;
+  return (h >>> 0) / 4294967296;
+};
+
+/**
+ * How far patch `i, j` of a field in the wind bends at time `t`, in pixels: a gust that travels
+ * across (`x`, the patch's place across the picture, sets where the gust is), plus the patch's own
+ * beat, so neighbours never move together. Never more than `amp` either way: the field bends in
+ * place, it never slides.
+ */
+export function swayAt(t: number, i: number, j: number, x: number, amp: number, speed = 1): [number, number] {
+  const ph = patchHash(i, j) * TAU, gust = 0.55 + 0.45 * Math.sin(t * 0.45 * speed - x * 5);
+  return [amp * gust * Math.sin(t * 1.9 * speed + ph), amp * 0.35 * gust * Math.sin(t * 1.3 * speed + ph * 1.7)];
+}
+
+/**
+ * How much patch `i, j` (at `x` across the picture) catches the light at time `t`, -0.4..1 times
+ * `shimmer` (above 0 lighter, below darker): a gust's band of light sweeping across the field, and
+ * the patch's own quick flutter.
+ */
+export function shimmerAt(t: number, i: number, j: number, x: number, shimmer: number, speed = 1): number {
+  const ph = patchHash(j, i) * TAU, band = Math.max(0, Math.sin(t * 0.9 * speed - x * 9)) ** 2;
+  return shimmer * (0.6 * band + 0.4 * Math.sin(t * 5 * speed + ph));
+}
+
+/** A wind patch's size on the screen, CSS pixels: about a character and a half, so a patch flips a few at a time. */
+const PATCH = 10;
+/** The picture's width at most, in its own pixels: ink samples a 1440 px screen at about 820 points across. */
+const WORK = 1280;
+/** The depth map's width: its masks are scaled up, which also softens their edges. */
+const MASK = 320;
+/** How many depth bands the depth of field blurs in. */
+const BANDS = 6;
+
+interface Drop { x: number; y: number; v: number; len: number }
+type Canvas = OffscreenCanvas;
+type Ctx = OffscreenCanvasRenderingContext2D;
+
+interface Built {
+  /** The picture, cropped, toned and softened by depth, at work size. */
+  pic: Canvas;
+  /** Each moving region's soft outline, at mask size, and its box in the picture's fractions. */
+  masks: (Canvas | null)[];
+  boxes: (Region | null)[];
+  /** A scratch canvas, for composing a moving region before it goes on. */
+  scratch: Canvas | null;
+  /** Each wind's light: one pixel a patch, written each frame and drawn scaled up in one go. */
+  lights: (Canvas | null)[];
+}
+
+interface State {
+  built: Built | null;
+  t: number;
+  drops: Drop[][];
+}
+
+function decode(b64: string, mime: string): Promise<ImageBitmap> | null {
+  if (typeof createImageBitmap !== "function" || typeof atob !== "function" || typeof OffscreenCanvas === "undefined") return null;
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return createImageBitmap(new Blob([bytes], { type: mime }));
+}
+
+const ctxOf = (c: Canvas): Ctx => c.getContext("2d") as Ctx;
+const outlineOf = (r: Region | Outline): Outline =>
+  typeof r[0] === "number" ? (([x0, y0, x1, y1]) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] as Outline)(r as Region) : (r as Outline);
+
 /** The picture's darkest and brightest tones (its 1st and 99th percentiles of lightness), 0..1. */
 function tonesOf(img: ImageBitmap, sx: number, sy: number, sw: number, sh: number): [number, number] {
   const c = new OffscreenCanvas(128, Math.max(1, Math.round((128 * sh) / sw))), g = c.getContext("2d", { willReadFrequently: true }) as Ctx;
@@ -220,132 +215,62 @@ function tonesOf(img: ImageBitmap, sx: number, sy: number, sw: number, sh: numbe
   return [at(0.01), at(0.99)];
 }
 
-/** A mask at the depth map's size: each pixel's alpha `a(depth)`. */
-function maskOf(D: Float32Array, mw: number, mh: number, a: (d: number) => number): Canvas {
-  const c = new OffscreenCanvas(mw, mh), g = ctxOf(c), id = g.createImageData(mw, mh);
-  for (let q = 0; q < D.length; q++) id.data[q * 4 + 3] = 255 * a(D[q]!);
-  g.putImageData(id, 0, 0);
-  return c;
-}
-
-/** Keep only what `mask` covers (scaled up, which softens its edge). */
-function cutTo(g: Ctx, mask: Canvas, w: number, h: number): void {
-  g.globalCompositeOperation = "destination-in";
-  g.imageSmoothingEnabled = true;
-  g.drawImage(mask, 0, 0, w, h);
-  g.globalCompositeOperation = "source-over";
-}
-
-/**
- * Fill a layer's transparent parts with the colours round them (push-pull): halve it again and again
- * (each half averages what is there), then from the smallest up lay each copy under the next larger,
- * and finally under the layer itself. A hole takes the colour of what surrounds it, smoothly.
- */
-function fillHoles(c: Canvas): void {
-  const levels: Canvas[] = [];
-  let prev = c, w = c.width, h = c.height;
-  while (w > 4 && h > 4) {
-    w = Math.ceil(w / 2); h = Math.ceil(h / 2);
-    const q = new OffscreenCanvas(w, h), g = ctxOf(q);
-    g.imageSmoothingEnabled = true;
-    g.drawImage(prev, 0, 0, w, h);
-    levels.push(q);
-    prev = q;
-  }
-  for (let k = levels.length - 1; k >= 0; k--) {
-    const under = levels[k + 1], g = ctxOf(levels[k]!);
-    if (!under) continue;
-    g.globalCompositeOperation = "destination-over";
-    g.imageSmoothingEnabled = true;
-    g.drawImage(under, 0, 0, levels[k]!.width, levels[k]!.height);
-    g.globalCompositeOperation = "source-over";
-  }
-  if (!levels[0]) return;
-  const g = ctxOf(c);
-  g.globalCompositeOperation = "destination-over";
-  g.imageSmoothingEnabled = true;
-  g.drawImage(levels[0], 0, 0, c.width, c.height);
-  g.globalCompositeOperation = "source-over";
-}
-
-/** Cut the picture into its layers, once: each the picture masked to its band and nearer, blurred by its distance from focus. */
+/** Compose the picture once: cropped, toned, and (with `sharp`) each depth band blurred for its distance from focus, nearer bands over farther. */
 function build(img: ImageBitmap, m: Masterwork): Built {
   const [c0, c1, c2, c3] = m.crop ?? [0, 0, 1, 1];
   const sw = img.width * (c2 - c0), sh = img.height * (c3 - c1), k = Math.min(1, WORK / sw);
-  const tone = m.levels ? levelsFilter(...tonesOf(img, img.width * c0, img.height * c1, sw, sh), m.levels) : "";
   const w = Math.round(sw * k), h = Math.round(sh * k);
-  const n = m.depth ? LAYERS : 1;
+  const tone = m.levels ? levelsFilter(...tonesOf(img, img.width * c0, img.height * c1, sw, sh), m.levels) : "";
+  const pic = new OffscreenCanvas(w, h), g = ctxOf(pic);
   const mw = MASK, mh = Math.max(1, Math.round((MASK * h) / w));
+  const bands = m.depth && m.sharp ? BANDS : 1;
   const D = new Float32Array(mw * mh);
-  if (m.depth) for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) D[j * mw + i] = depthAt(m.depth, (i + 0.5) / mw, (j + 0.5) / mh);
-  const layers: Canvas[] = [], boxes: Rect[] = [], e = 0.35 / n;
-  const soft = (v: number, at: number) => clamp((v - at + e) / (2 * e), 0, 1);
-  for (let L = 0; L < n; L++) {
-    const c = new OffscreenCanvas(w, h), g = ctxOf(c), lo = L / n, hi = (L + 1) / n;
-    const blur = blurAt(m.depth ? m.sharp : undefined, (L + 0.5) / n);
+  if (bands > 1) for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) D[j * mw + i] = depthAt(m.depth!, (i + 0.5) / mw, (j + 0.5) / mh);
+  for (let L = 0; L < bands; L++) {
+    const blur = bands > 1 ? blurAt(m.sharp, (L + 0.5) / bands) : 0;
     const f = [tone, blur > 0.2 ? `blur(${blur.toFixed(2)}px)` : ""].filter(Boolean).join(" ");
-    if (f) g.filter = f;
-    g.drawImage(img, img.width * c0, img.height * c1, sw, sh, 0, 0, w, h);
-    g.filter = "none";
-    if (n === 1) { boxes.push({ x: 0, y: 0, w, h }); layers.push(c); continue; }
-    // The band's own picture (and half a band nearer, so the ground runs on under the next layer's
-    // soft edge). Where something nearer stands, the layer holds what would be behind it: the colours
-    // round it, pulled in from smaller and smaller copies. When the camera moves the near thing
-    // aside, that is what shows, not a second copy of the near thing.
-    if (L < n - 1) {
-      cutTo(g, maskOf(D, mw, mh, (d) => soft(d, lo) * (1 - soft(d, hi + 0.5 / n))), w, h);
-      fillHoles(c);
-    }
-    // Then keep only this band and nearer: farther things are the farther layers'.
-    if (L > 0) {
-      const keep = (d: number) => soft(d, lo);
-      cutTo(g, maskOf(D, mw, mh, keep), w, h);
-      let i0 = mw, i1 = -1, j0 = mh, j1 = -1;
-      for (let q = 0; q < D.length; q++) if (keep(D[q]!) > 0) { const i = q % mw, j = (q - i) / mw; if (i < i0) i0 = i; if (i > i1) i1 = i; if (j < j0) j0 = j; if (j > j1) j1 = j; }
-      // One mask pixel of margin each side: the scaled-up mask's soft edge reaches that far.
-      const kx = w / mw, ky = h / mh, x0 = Math.max(0, (i0 - 1) * kx), y0 = Math.max(0, (j0 - 1) * ky);
-      boxes.push(i1 < 0 ? { x: 0, y: 0, w: 0, h: 0 } : { x: x0, y: y0, w: Math.min(w, (i1 + 2) * kx) - x0, h: Math.min(h, (j1 + 2) * ky) - y0 });
-    } else boxes.push({ x: 0, y: 0, w, h });
-    layers.push(c);
+    // The farthest band is the whole picture; each nearer one goes over it where the picture is at least that near.
+    const c = L === 0 ? pic : new OffscreenCanvas(w, h), cg = ctxOf(c);
+    if (f) cg.filter = f;
+    cg.drawImage(img, img.width * c0, img.height * c1, sw, sh, 0, 0, w, h);
+    cg.filter = "none";
+    if (L === 0) continue;
+    const lo = L / bands, e = 0.35 / bands, mc = new OffscreenCanvas(mw, mh), mg = ctxOf(mc), id = mg.createImageData(mw, mh);
+    for (let q = 0; q < D.length; q++) id.data[q * 4 + 3] = 255 * clamp((D[q]! - lo + e) / (2 * e), 0, 1);
+    mg.putImageData(id, 0, 0);
+    cg.globalCompositeOperation = "destination-in";
+    cg.imageSmoothingEnabled = true;
+    cg.drawImage(mc, 0, 0, w, h);
+    g.drawImage(c, 0, 0);
   }
-  const flows = m.effects.map((e) => {
-    if (e.kind !== "flow") return null;
-    const c = new OffscreenCanvas(mw, mh), g = ctxOf(c), o = outlineOf(e.region);
-    g.filter = "blur(2px)";
-    g.fillStyle = "#fff";
-    g.beginPath();
-    o.forEach(([x, y], i) => (i ? g.lineTo(x * mw, y * mh) : g.moveTo(x * mw, y * mh)));
-    g.closePath();
-    g.fill();
+  const moving = (e: Effect): e is Extract<Effect, { kind: "flow" | "wind" }> => e.kind === "flow" || e.kind === "wind";
+  const masks = m.effects.map((e) => {
+    if (!moving(e)) return null;
+    const c = new OffscreenCanvas(mw, mh), mg = ctxOf(c);
+    const fill = (o: Outline) => { mg.beginPath(); o.forEach(([x, y], i) => (i ? mg.lineTo(x * mw, y * mh) : mg.moveTo(x * mw, y * mh))); mg.closePath(); mg.fill(); };
+    mg.filter = "blur(2px)";
+    mg.fillStyle = "#fff";
+    fill(outlineOf(e.region));
+    // What holds still inside it is cut out, with the same soft edge.
+    mg.globalCompositeOperation = "destination-out";
+    for (const o of e.except ?? []) fill(o);
     return c;
   });
-  const flowBoxes = m.effects.map((e): Region | null => {
-    if (e.kind !== "flow") return null;
+  const boxes = m.effects.map((e): Region | null => {
+    if (!moving(e)) return null;
     const o = outlineOf(e.region), xs = o.map((p) => p[0]), ys = o.map((p) => p[1]), pad = 0.02;
     return [Math.max(0, Math.min(...xs) - pad), Math.max(0, Math.min(...ys) - pad), Math.min(1, Math.max(...xs) + pad), Math.min(1, Math.max(...ys) + pad)];
   });
-  return { w, h, layers, boxes, flows, flowBoxes, scratch: null };
+  return { pic, masks, boxes, scratch: null, lights: m.effects.map(() => null) };
 }
 
-/** The layer holding depth `z`: the band it falls in (each layer holds its band, and behind nearer things the colours round them). */
-const layerFor = (b: Built, z: number): Canvas => b.layers[Math.min(b.layers.length - 1, Math.floor(z * b.layers.length))]!;
-/** The depth layer `L` is drawn at: its band's middle. */
-const zOfLayer = (b: Built, L: number): number => (b.layers.length === 1 ? 0.5 : (L + 0.5) / b.layers.length);
+type Rect = { x: number; y: number; w: number; h: number };
 
-/** How long one cross-fade of a flow takes, seconds: long enough that the drift reads, short enough that nothing smears. */
-export const FLOW_CYCLE = 4;
-
-/** The two copies of a flowing region at time `t`: how far each has slid along the flow (-0.5..0.5 of its travel) and how much of it shows. Each is invisible at the moment it jumps back. */
-export function flowPhases(t: number): [{ at: number; weight: number }, { at: number; weight: number }] {
-  const a = (((t / FLOW_CYCLE) % 1) + 1) % 1, b = (a + 0.5) % 1;
-  return [{ at: a - 0.5, weight: Math.sin(Math.PI * a) ** 2 }, { at: b - 0.5, weight: Math.sin(Math.PI * b) ** 2 }];
-}
-
-/** Water or cloud that flows, as a cinemagraph does: two copies of the region sliding along the flow, cross-fading, kept inside its soft outline. */
-function drawFlow(g: Paint, t: number, b: Built, e: Extract<Effect, { kind: "flow" }>, mask: Canvas, box: Region, r: Rect, src: Canvas): void {
-  const len = Math.hypot(e.dir[0], e.dir[1]) || 1, ux = e.dir[0] / len, uy = e.dir[1] / len;
-  const travel = (e.speed ?? 0.01) * FLOW_CYCLE * r.w;
-  // Compose in a scratch canvas the size of the flow's box on the layer, in device pixels, then lay it on.
+/**
+ * A moving region: drawn by `paint` into a scratch canvas the size of its box (in the picture
+ * layer's own pixels), kept inside its soft outline, then laid over the still picture.
+ */
+function drawMoving(g: Paint, b: Built, mask: Canvas, box: Region, r: Rect, paint: (c: Ctx, ox: number, oy: number) => void): void {
   const T = g.getTransform(), sx = T.a, sy = T.d;
   const [bx0, by0, bx1, by1] = box, X = r.x + r.w * bx0, Y = r.y + r.h * by0, BW = r.w * (bx1 - bx0), BH = r.h * (by1 - by0);
   const W = Math.max(1, Math.ceil(BW * sx)), H = Math.max(1, Math.ceil(BH * sy));
@@ -353,13 +278,11 @@ function drawFlow(g: Paint, t: number, b: Built, e: Extract<Effect, { kind: "flo
   const c = ctxOf(b.scratch);
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.globalCompositeOperation = "source-over";
+  c.globalAlpha = 1;
   c.clearRect(0, 0, W, H);
-  // In the scratch, the layer's rectangle sits at (r.x - X, r.y - Y) CSS pixels.
+  // In the scratch, CSS pixels again, with the box's corner at the origin.
   c.setTransform(sx, 0, 0, sy, 0, 0);
-  for (const ph of flowPhases(t)) {
-    c.globalAlpha = ph.weight;
-    c.drawImage(src, r.x - X + ux * travel * ph.at, r.y - Y + uy * travel * ph.at, r.w, r.h);
-  }
+  paint(c, X, Y);
   c.globalAlpha = 1;
   c.globalCompositeOperation = "destination-in";
   c.drawImage(mask, r.x - X, r.y - Y, r.w, r.h);
@@ -368,22 +291,12 @@ function drawFlow(g: Paint, t: number, b: Built, e: Extract<Effect, { kind: "flo
 }
 
 export function defineMasterwork(m: Masterwork): Scene<State> {
-  const cam: Required<Camera> | null = m.camera === false ? null : { ...CAMERA, ...m.camera };
-  const over = cam ? overscan(cam) : 1;
-  const zOf = (x: number, y: number) => (m.depth ? depthAt(m.depth, x, y) : 0.5);
-  /** Everything a frame needs to put a point of the picture on the screen. */
-  const view = (s: State, W: number, H: number) => {
-    const b = s.built;
-    const p = place(b ? { width: b.w, height: b.h } : { width: W, height: H }, { focus: m.focus ?? [0.5, 0.5] }, W, H);
-    const c = cam ? cameraAt(cam, s.t, s.lean.x, s.lean.y, W, H) : { x: 0, y: 0, breath: 0 };
-    const rect = (z: number): Rect => (cam ? layerRect(p, c, cam, z, W, H, over) : { x: p.dx, y: p.dy, w: p.dw, h: p.dh });
-    const toScreen = (x: number, y: number, z = zOf(x, y)): [number, number] => { const r = rect(z); return [r.x + r.w * x, r.y + r.h * y]; };
-    return { rect, toScreen };
+  const rectOf = (s: State, W: number, H: number): Rect => {
+    const p = place(s.built ? { width: s.built.pic.width, height: s.built.pic.height } : { width: W, height: H }, { focus: m.focus ?? [0.5, 0.5] }, W, H);
+    return { x: p.dx, y: p.dy, w: p.dw, h: p.dh };
   };
   const seedFx = (W: number, H: number, rng: () => number, s: State) => {
     s.drops = m.effects.map((e) => (e.kind === "rain" ? Array.from({ length: e.count }, () => ({ x: rng() * W, y: rng() * H, v: 0.8 + rng() * 0.4, len: (e.length ?? 26) * (0.6 + rng() * 0.8) })) : []));
-    s.flakes = m.effects.map((e) => (e.kind === "fall" ? Array.from({ length: e.count }, () => ({ x: rng() * W, y: rng() * H, vx: (rng() - 0.5) * 12, vy: (e.speed ?? 22) * (0.6 + rng() * 0.8), r: (e.size ?? 3) * (0.6 + rng() * 0.8), c: e.colours[Math.floor(rng() * e.colours.length)]!, spin: rng() * TAU })) : []));
-    s.birds = m.effects.map((e) => (e.kind === "birds" ? Array.from({ length: e.count }, (_, i) => ({ x: rng() * W, y: 0, v: 18 + rng() * 14, phase: rng() * TAU, flock: i % 3 })) : []));
   };
 
   return defineScene<State>({
@@ -393,7 +306,7 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
     style: (look) => ({ kind: "ink", cell: [7, 13], ambient: 1, glow: 0.4, edge: 0.12, ...m.style?.(look) }),
 
     create(w) {
-      const s: State = { built: null, t: 0, lean: { x: 0, y: 0 }, drops: [], flakes: [], birds: [] };
+      const s: State = { built: null, t: 0, drops: [] };
       seedFx(w.size.w, w.size.h, w.rng, s);
       decode(m.image, m.mime ?? "image/jpeg")?.then((img) => { s.built = build(img, m); }).catch(() => {});
       return s;
@@ -402,36 +315,16 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
 
     step(s, dt, w) {
       s.t += dt;
-      const { w: W, h: H } = w.size, ptr = w.input.pointer;
-      // The camera leans toward a pointer over the picture, slowly, and back when it leaves.
-      const tx = ptr.active ? clamp((ptr.x / W) * 2 - 1, -1, 1) : 0, ty = ptr.active ? clamp((ptr.y / H) * 2 - 1, -1, 1) : 0;
-      const ease = Math.min(1, dt * 1.2);
-      s.lean.x += (tx - s.lean.x) * ease;
-      s.lean.y += (ty - s.lean.y) * ease;
-      const { toScreen } = view(s, W, H);
+      const r = rectOf(s, w.size.w, w.size.h);
       m.effects.forEach((e, k) => {
-        if (e.kind === "rain") {
-          const [x0, y0, x1, y1] = e.region ?? [0, 0, 1, 1], [ax, ay] = toScreen(x0, y0, 1), [bx, by] = toScreen(x1, y1, 1);
-          const sp = (e.speed ?? 900) * dt, sx = Math.sin(e.angle), cy = Math.cos(e.angle);
-          for (const d of s.drops[k]!) {
-            d.y += sp * d.v * cy; d.x += sp * d.v * sx;
-            if (d.y > by) { d.y = ay - d.len; d.x = ax + w.rng() * (bx - ax); }
-            if (d.x > bx + 40) d.x -= bx - ax;
-            if (d.x < ax - 40) d.x += bx - ax;
-          }
-        } else if (e.kind === "fall") {
-          const [x0, y0, x1, y1] = e.region, [ax, ay] = toScreen(x0, y0, 1), [bx, by] = toScreen(x1, y1, 1);
-          for (const f of s.flakes[k]!) {
-            f.spin += dt * 2; f.x += (f.vx + Math.sin(s.t * 0.7 + f.spin) * 10) * dt; f.y += f.vy * dt;
-            if (f.y > by) { f.y = ay; f.x = ax + w.rng() * (bx - ax); }
-          }
-        } else if (e.kind === "birds") {
-          const [x0, y0, x1, y1] = e.region, z = zOf((x0 + x1) / 2, (y0 + y1) / 2), [ax, ay] = toScreen(x0, y0, z), [bx, by] = toScreen(x1, y1, z);
-          s.birds[k]!.forEach((b, i) => {
-            b.phase += dt * 9; b.x += b.v * dt;
-            if (b.x > bx + 30) b.x = ax - 30;
-            b.y = ay + (by - ay) * (0.3 + 0.4 * ((b.flock * 0.37 + 0.2) % 1)) + Math.sin(s.t * 0.4 + i) * 10 + (i % 5) * 6;
-          });
+        if (e.kind !== "rain") return;
+        const [x0, y0, x1, y1] = e.region ?? [0, 0, 1, 1], ax = r.x + r.w * x0, ay = r.y + r.h * y0, bx = r.x + r.w * x1, by = r.y + r.h * y1;
+        const sp = (e.speed ?? 900) * dt, sx = Math.sin(e.angle), cy = Math.cos(e.angle);
+        for (const d of s.drops[k]!) {
+          d.y += sp * d.v * cy; d.x += sp * d.v * sx;
+          if (d.y > by) { d.y = ay - d.len; d.x = ax + w.rng() * (bx - ax); }
+          if (d.x > bx + 40) d.x -= bx - ax;
+          if (d.x < ax - 40) d.x += bx - ax;
         }
       });
     },
@@ -441,25 +334,40 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
     picture(s, g, w) {
       const b = s.built;
       if (!b) return;
-      const { w: W, h: H } = w.size, { rect, toScreen } = view(s, W, H);
-      // The layers, far to near, each slid and grown for its depth.
-      b.layers.forEach((c, L) => {
-        const r = rect(zOfLayer(b, L)), q = b.boxes[L]!;
-        if (q.w > 0 && q.h > 0) g.drawImage(c, q.x, q.y, q.w, q.h, r.x + (r.w * q.x) / b.w, r.y + (r.h * q.y) / b.h, (r.w * q.w) / b.w, (r.h * q.h) / b.h);
-      });
+      const { w: W } = w.size, r = rectOf(s, W, w.size.h);
+      g.drawImage(b.pic, r.x, r.y, r.w, r.h);
       m.effects.forEach((e, k) => {
         if (e.kind === "flow") {
-          const [cx, cy] = centreOf(outlineOf(e.region)), z = zOf(cx, cy);
-          drawFlow(g, s.t, b, e, b.flows[k]!, b.flowBoxes[k]!, rect(z), layerFor(b, z));
+          // Water or cloud, as a cinemagraph: two copies sliding along the flow, cross-fading.
+          const len = Math.hypot(e.dir[0], e.dir[1]) || 1, ux = e.dir[0] / len, uy = e.dir[1] / len, travel = (e.speed ?? 0.01) * FLOW_CYCLE * r.w;
+          drawMoving(g, b, b.masks[k]!, b.boxes[k]!, r, (c, ox, oy) => {
+            for (const ph of flowPhases(s.t)) { c.globalAlpha = ph.weight; c.drawImage(b.pic, r.x - ox + ux * travel * ph.at, r.y - oy + uy * travel * ph.at, r.w, r.h); }
+          });
         } else if (e.kind === "wind") {
-          // Redraw the region in rows, each shifted on a slow wave: a field leans in the wind.
-          const [x0, y0, x1, y1] = e.region, rows = 26, amp = e.amp ?? 4, sp = e.speed ?? 1, z = zOf((x0 + x1) / 2, (y0 + y1) / 2);
-          const src = layerFor(b, z), r = rect(z);
-          for (let q = 0; q < rows; q++) {
-            const fy0 = y0 + ((y1 - y0) * q) / rows, fy1 = y0 + ((y1 - y0) * (q + 1)) / rows;
-            const off = Math.sin(s.t * 0.9 * sp - q * 0.25) * amp * (1 - (q / rows) * 0.5);
-            g.drawImage(src, b.w * x0, b.h * fy0, b.w * (x1 - x0), b.h * (fy1 - fy0), r.x + r.w * x0 + off, r.y + r.h * fy0, r.w * (x1 - x0), r.h * (fy1 - fy0) + 0.5);
+          // Grass, wheat or leaves in place: the region in thin rows, each swaying on its own beat, and
+          // over them its light: one pixel a patch (a gust's band and each patch's flutter), drawn
+          // scaled up and smooth in one go. A few dozen draws a frame, whatever the region's size.
+          const [bx0, by0, bx1, by1] = b.boxes[k]!, amp = e.amp ?? 3, sp = e.speed ?? 1, shimmer = e.shimmer ?? 0.4;
+          const i0 = Math.floor((bx0 * r.w) / PATCH), i1 = Math.ceil((bx1 * r.w) / PATCH), j0 = Math.floor((by0 * r.h) / PATCH), j1 = Math.ceil((by1 * r.h) / PATCH);
+          const cols = Math.max(1, i1 - i0), rows = Math.max(1, j1 - j0);
+          let L = b.lights[k] ?? null;
+          if (!L || L.width !== cols || L.height !== rows) L = b.lights[k] = new OffscreenCanvas(cols, rows);
+          const lg = ctxOf(L), img = lg.createImageData(cols, rows), d = img.data;
+          for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+            const v = shimmerAt(s.t, i0 + i, j0 + j, ((i0 + i) * PATCH) / r.w, shimmer, sp), q = (j * cols + i) * 4;
+            if (v > 0) { d[q] = 255; d[q + 1] = 250; d[q + 2] = 235; d[q + 3] = v * 255; } else d[q + 3] = -v * 255;
           }
+          lg.putImageData(img, 0, 0);
+          const kx = b.pic.width / r.w, ky = b.pic.height / r.h;
+          drawMoving(g, b, b.masks[k]!, b.boxes[k]!, r, (c, ox, oy) => {
+            c.drawImage(b.pic, r.x - ox, r.y - oy, r.w, r.h);
+            for (let j = j0; j < j1; j++) {
+              const [dx] = swayAt(s.t, 0, j, 0.5, amp, sp);
+              c.drawImage(b.pic, i0 * PATCH * kx, j * PATCH * ky, cols * PATCH * kx, PATCH * ky, r.x - ox + i0 * PATCH + dx, r.y - oy + j * PATCH, cols * PATCH, PATCH);
+            }
+            c.imageSmoothingEnabled = true;
+            c.drawImage(L!, r.x - ox + i0 * PATCH, r.y - oy + j0 * PATCH, cols * PATCH, rows * PATCH);
+          });
         } else if (e.kind === "rain") {
           g.strokeStyle = e.colour; g.globalAlpha = e.alpha ?? 0.55; g.lineWidth = 1.2;
           const sx = Math.sin(e.angle), cy = Math.cos(e.angle);
@@ -469,31 +377,26 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
         } else if (e.kind === "mist") {
           const c = hex(e.colour);
           for (const [i, fy] of e.bands.entries()) {
-            const [, y] = toScreen(0.5, fy), x = ((s.t * (e.speed ?? 8) * (i % 2 ? 1 : -0.7) + i * 400) % (W * 1.6)) - W * 0.3;
+            const y = r.y + r.h * fy, x = ((s.t * (e.speed ?? 8) * (i % 2 ? 1 : -0.7) + i * 400) % (W * 1.6)) - W * 0.3;
             const gr = g.createRadialGradient(x, y, 0, x, y, W * 0.4);
             gr.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},${e.alpha ?? 0.35})`); gr.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},0)`);
             g.save(); g.translate(x, y); g.scale(1, 0.18); g.translate(-x, -y);
             g.fillStyle = gr; g.fillRect(x - W * 0.4, y - W * 0.4, W * 0.8, W * 0.8); g.restore();
           }
-        } else if (e.kind === "birds") {
-          g.strokeStyle = e.colour; g.lineWidth = 1.6;
-          for (const bd of s.birds[k]!) { const f = Math.sin(bd.phase) * 4; g.beginPath(); g.moveTo(bd.x - 7, bd.y - f); g.quadraticCurveTo(bd.x - 3, bd.y - 2, bd.x, bd.y); g.quadraticCurveTo(bd.x + 3, bd.y - 2, bd.x + 7, bd.y - f); g.stroke(); }
-        } else if (e.kind === "fall") {
-          for (const f of s.flakes[k]!) { g.fillStyle = f.c; g.beginPath(); g.ellipse(f.x, f.y, f.r, f.r * (0.5 + 0.5 * Math.abs(Math.sin(f.spin))), f.spin, 0, TAU); g.fill(); }
         }
       });
     },
 
     light(s, g, w) {
       if (!s.built) return;
-      const { toScreen, rect } = view(s, w.size.w, w.size.h);
+      const r = rectOf(s, w.size.w, w.size.h);
       for (const e of m.effects) {
         if (e.kind !== "glow") continue;
-        const [x, y] = toScreen(e.at[0], e.at[1]), r0 = rect(zOf(e.at[0], e.at[1])), r = e.radius * Math.min(r0.w, r0.h);
+        const x = r.x + r.w * e.at[0], y = r.y + r.h * e.at[1], rad = e.radius * Math.min(r.w, r.h);
         const a = e.alpha * (1 + (e.pulse ?? 0) * Math.sin(s.t * 1.7));
-        const gr = g.createRadialGradient(x, y, 0, x, y, r);
+        const gr = g.createRadialGradient(x, y, 0, x, y, rad);
         gr.addColorStop(0, `rgba(${e.colour[0]},${e.colour[1]},${e.colour[2]},${a})`); gr.addColorStop(1, `rgba(${e.colour[0]},${e.colour[1]},${e.colour[2]},0)`);
-        g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+        g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
       }
     },
   });

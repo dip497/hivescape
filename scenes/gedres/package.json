@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
-  "description": "Joseph Vigier's photograph of Gèdres in the Pyrenees, 1853, alive: the river pours over the rapids under the bridge, the valley moves past the mountain.",
+  "description": "Joseph Vigier's photograph of Gèdres in the Pyrenees, 1853, alive: the river pours over the rapids under the bridge and the trees stir, the village still.",
   "exports": {
     ".": "./src/index.ts"
   },
   "hivescape": {
     "name": "Gèdres",
-    "description": "Joseph Vigier's photograph of Gèdres in the Pyrenees, 1853, alive: the river pours over the rapids under the bridge, the valley moves past the mountain.",
+    "description": "Joseph Vigier's photograph of Gèdres in the Pyrenees, 1853, alive: the river pours over the rapids under the bridge and the trees stir, the village still.",
     "credit": "Joseph Vigier, Village de Gèdres, Route de Gavarnie, 1853. Salted paper print from paper negative. The Metropolitan Museum of Art (2005.100.503.10), Gilman Collection, Open Access, CC0."
   }
 }

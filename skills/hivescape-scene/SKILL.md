@@ -27,7 +27,7 @@ its ritual) and go further than the obvious version.
 | A built world, terraces, objects with tops and sides | `isometric()` | `native` (cells lose the detail) |
 | Growing things, petals, birds: illustration | side-on | `native` (Garden of the day) |
 | Anything meant to read as character art; type, code, signal | any | `ascii` |
-| A painting or a photograph, alive | the picture's own, in depth layers | `ink`, with `@hivescape/paintings` (`hivescape-living-picture`) |
+| A painting or a photograph, alive | the picture's own, held still | `ink`, with `@hivescape/paintings` (`hivescape-living-picture`) |
 
 For `ascii`, paint thin things (grass, reeds, rigging) as strokes about 2 px wide, so they come out
 as `| / \ -`, and give flat areas some shading (a gradient down each tier, a lit side), because a
@@ -42,8 +42,9 @@ wide. If what you want to show cannot be read at 5 cells, choose `native` for th
 A photograph or a painting made to move (`defineMasterwork`, `@hivescape/paintings`, shown in `ink`)
 is the fastest way to a picture of the highest quality, and the right one for a tradition's own art
 (a deity, a woodblock print, an ink landscape) that drawing it ourselves would only imitate. The
-`hivescape-living-picture` skill covers it: choosing and crediting the picture, its depth layers,
-the camera, flowing water, and filming it to review the motion.
+`hivescape-living-picture` skill covers it: choosing and crediting the picture, moving only what
+would move in life (water, plants in the wind, weather) while the rest holds still, and filming it to
+check its motion map.
 
 ## 3. Paint colour, let light make brightness
 

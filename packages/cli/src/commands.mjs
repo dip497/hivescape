@@ -92,8 +92,8 @@ export async function shot(dir, flags) {
 /**
  * A film of the scene, to see how it moves: every frame is stepped at its own time (the page runs on
  * frames the CLI gives it), so the film plays as the scene runs on a fast machine however slow this
- * one is; a software GPU only makes it take longer. Writes an MP4 (and, with --webp, an animated WebP).
- * Needs ffmpeg.
+ * one is; a software GPU only makes it take longer. Writes an MP4, a motion map (where the frame
+ * changes: what should hold still is black), and with --webp an animated WebP. Needs ffmpeg.
  */
 export async function film(dir, flags) {
   const { id } = sceneEntry(dir);
@@ -130,6 +130,11 @@ export async function film(dir, flags) {
     const enc = (args) => { const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-framerate", String(fps), "-i", path.join(frames, "f%05d.png"), ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); };
     enc(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "slow", "-movflags", "+faststart", mp4]);
     console.log(`film: ${mp4}`);
+    // The motion map: where the frame changes, frame to frame, on average (brighter moves more). What
+    // should hold still (a building, a figure) is black; what moves (water, grass) shows.
+    const motion = path.join(out, `${name}-motion.png`);
+    enc(["-vf", `format=gray,tblend=all_mode=difference,tmix=frames=${Math.min(1000, Math.max(1, n - 1))},normalize=smoothing=0`, "-update", "1", motion]);
+    console.log(`film: ${motion}`);
     if (flags.webp) {
       const webp = path.join(out, `${name}.webp`);
       enc(["-vf", `scale=${Math.min(960, w)}:-1:flags=lanczos`, "-loop", "0", "-c:v", "libwebp", "-quality", "70", "-compression_level", "6", webp]);
