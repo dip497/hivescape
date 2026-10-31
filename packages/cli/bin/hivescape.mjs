@@ -5,8 +5,8 @@ import { bench, build, dev, pack, shot } from "../src/commands.mjs";
 const USAGE = `hivescape <command> <scene folder> [flags]
 
   dev    <scene>   live preview with reload             --port 5174  (?agents=5&tiles=1: stand-in agents)
-  shot   <scene>   pictures and a sheet, dark and light  --out DIR --kind comb,ascii --w 1440 --h 900 --backend webgl2|canvas2d --agents 5 --turns 40 --wait 2.5
-  bench  <scene>   script time and fps per backend and style, frame cap off   --json FILE
+  shot   <scene>   pictures and a sheet, dark and light  --out DIR --kind comb,ascii --w 1440 --h 900 --backend webgl2|canvas2d --agents 5 --turns 40 --wait 2.5 --dpr 2
+  bench  <scene>   script time and fps per backend and style, frame cap off   --json FILE --kind ink
   build  <scene>   a page and its script                 --out DIR
   pack   <scene>   a Hivemind live wallpaper folder      --out DIR --package @owner/name --name "Package name" --kind ascii
 `;

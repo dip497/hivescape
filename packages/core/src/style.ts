@@ -22,6 +22,7 @@ const BASE = {
   torch: 180,
   glow: 0.6,
   flicker: 0,
+  edge: 0.09,
 } satisfies Partial<StyleSpec>;
 
 export const STYLES: Record<StyleKind, StyleSpec> = {
@@ -29,6 +30,9 @@ export const STYLES: Record<StyleKind, StyleSpec> = {
   // Cells as a terminal's, taller than wide. A body's character, cut darker into its block, is
   // sparse on bright skin and dense in shadow, so the texture deepens the shading.
   ascii: { ...BASE, kind: "ascii", cell: [9, 13], ramp: ".:-=+*x%#@", gap: 1, threshold: 0.58, soft: 0.1, torch: 150 },
+  // Small cells, the whole frame: characters from sparse to dense as the picture brightens on the
+  // dark ground, and lines where its brightness changes sharply inside a cell.
+  ink: { ...BASE, kind: "ink", cell: [7, 13], ramp: " .:;+=*oO0#@", soft: 0.035, torch: 160, glow: 0.35 },
   pixel: { ...BASE, kind: "pixel", cell: [8, 8], soft: 0.5, relief: 0.3, gloss: 0.2 },
   native: { ...BASE, kind: "native", cell: [1, 1], soft: 0, threshold: 0 },
 };
@@ -46,8 +50,11 @@ export function resolveStyle(
   let carried: Partial<StyleSpec> = fromScene.kind && fromScene.kind !== kind
     ? { ambient: fromScene.ambient ?? BASE.ambient, key: fromScene.key ?? BASE.key, glow: fromScene.glow ?? BASE.glow }
     : fromScene;
-  if (kind === "ascii" && carried.ambient !== undefined && fromScene.kind !== "ascii") carried = { ...carried, ambient: Math.max(carried.ambient, 0.65) };
+  if ((kind === "ascii" || kind === "ink") && carried.ambient !== undefined && fromScene.kind !== kind) carried = { ...carried, ambient: Math.max(carried.ambient, 0.65) };
   const out = { ...STYLES[kind], ...carried, ...override, kind };
   if (kind === "comb") out.cell = [out.cell[0], out.cell[0] * COMB_ROW];
   return out;
 }
+
+/** Styles that draw creatures as characters too: a scene paints them in `picture`, not `front`. */
+export const inCharacters = (kind: StyleKind): boolean => kind === "ascii" || kind === "ink";

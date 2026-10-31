@@ -1,8 +1,8 @@
 # How Hivescape works
 
 A scene says what is there. Hivescape decides how it is shown. That split is the whole design: a
-scene written once can be a lit honeycomb, terminal-style ascii, pixels or a plain illustration, and it
-runs in a page, a worker or a Hivemind wallpaper without knowing which.
+scene written once can be a lit honeycomb, terminal-style ascii, pixels, a plain illustration or the
+characters of an ASCII shader (ink), and it runs in a page, a worker or a Hivemind wallpaper without knowing which.
 
 ```
  scene                          renderer                                  layers
@@ -81,6 +81,21 @@ its tuning for its own kind.
   A night scene's low ambient is lifted to at least 0.65 here, so characters still read.
 - **pixel**: square cells, with an optional bevel.
 - **native**: the picture itself at the screen's resolution, lit and glowing, with no cells.
+- **ink**: the whole frame in characters, as an ASCII shader draws it, made for paintings and
+  photographs. The backdrop is drawn into the picture, so every cell is covered. From each cell's
+  4 × 4 samples come its colour, its brightness, the change across it and the spread of brightness
+  inside it (its detail). `frame.ts` holds the rules both backends follow (`INK`, `inkColours`,
+  `inkTone`, `inkStrength`):
+  - a flat cell (a sky, a blurred surround) keeps near its own colour and takes a faint, light
+    character, so the picture keeps its tones and a sky is not a wall of `0`;
+  - a detailed cell takes a darker ground and a bright character, as dense as the cell is bright
+    (as dark, on a light look), so the characters draw the painting's detail;
+  - a sharp change across a cell is an edge, drawn as a line along it. The atlas draws ink's lines
+    itself, edge to edge of the cell (`─ │ ╱ ╲`), so neighbours join into one unbroken line;
+  - a seam under each row gives the scan lines of a screen.
+
+  `@hivescape/paintings` builds scenes for it from public-domain paintings: the painting covers the
+  screen round its focus, and effects placed in the painting's own fractions move it.
 
 ## Light
 
@@ -125,6 +140,10 @@ crosses: they rise toward the light, catch more of it, and their shadows lengthe
   mask, and lays the bevels over it. The mask and the bevels are drawn once per size. That is five
   full-layer draws a frame, whatever the cell count, with no cast shadows. The layer is kept at one
   device pixel per CSS pixel.
+
+In ink, the 2D path stamps each cell's character in white onto a layer it keeps from frame to frame,
+and restamps only the cells whose character or strength changed (a painting is mostly still); it
+then colours the stamps per cell in one draw and lays them over the cells' grounds.
 
 A native scene (its whole picture at full resolution) gains nothing from WebGL and would upload a
 full-resolution picture every frame there; when the backend is left to choose, `Engine` draws a

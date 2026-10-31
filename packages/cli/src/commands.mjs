@@ -41,8 +41,8 @@ export async function dev(dir, flags) {
   console.log(`hivescape dev: http://127.0.0.1:${port}/  (?look=light, ?kind=ascii, ?backend=canvas2d, ?thread=main)`);
 }
 
-async function open(browser, url, w, h) {
-  const page = await browser.newPage({ viewport: { width: w, height: h } });
+async function open(browser, url, w, h, dpr = 1) {
+  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
   page.on("pageerror", (e) => console.error("page:", e.message));
   page.on("console", (m) => { if (m.type() === "error") console.error("console:", m.text()); });
   await page.goto(url);
@@ -66,7 +66,7 @@ export async function shot(dir, flags) {
   try {
     for (const kind of kinds) for (const look of ["dark", "light"]) {
       const q = new URLSearchParams({ look, bare: "1", seed: String(flags.seed ?? 1), ...(kind ? { kind } : {}), ...(flags.backend ? { backend: flags.backend } : {}), ...(flags.agents ? { agents: String(flags.agents), tiles: "1" } : {}), ...(flags.turns ? { turns: String(flags.turns) } : {}) });
-      const page = await open(browser, `http://127.0.0.1:${port}/?${q}`, w, h);
+      const page = await open(browser, `http://127.0.0.1:${port}/?${q}`, w, h, +(flags.dpr ?? 1));
       const name = `${id}${kind ? "-" + kind : ""}-${look}`;
       const snap = async (step) => { const f = path.join(out, `${name}-${step}.png`); await page.screenshot({ path: f }); tiles.push({ f, label: `${kind || "default"} · ${look} · ${step.slice(1)}` }); };
       // --wait: seconds before the first picture. A software GPU draws a few frames a second, and the
@@ -98,7 +98,7 @@ export async function bench(dir, flags) {
   const rows = [];
   try {
     const env = await (async () => { const p = await browser.newPage(); const r = await p.evaluate(() => { const c = document.createElement("canvas").getContext("webgl2"); const d = c?.getExtension("WEBGL_debug_renderer_info"); return d ? c.getParameter(d.UNMASKED_RENDERER_WEBGL) : c ? "webgl2" : "none"; }); await p.close(); return r; })();
-    for (const backend of ["webgl2", "canvas2d"]) for (const kind of ["comb", "ascii", "pixel", "native"]) for (const dpr of [1, 2]) {
+    for (const backend of ["webgl2", "canvas2d"]) for (const kind of (flags.kind ? String(flags.kind).split(",") : ["comb", "ascii", "pixel", "native", "ink"])) for (const dpr of [1, 2]) {
       const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: dpr });
       await page.goto(`http://127.0.0.1:${port}/?bare=1&thread=main&fps=240&backend=${backend}&kind=${kind}`);
       await page.waitForFunction(() => window.__drawn === true, null, { timeout: 30_000 });
@@ -125,7 +125,7 @@ export async function pack(dir, flags) {
   const meta = JSON.parse(readFileSync(path.join(abs, "package.json"), "utf8"));
   // --kind ascii packs the scene in that style, as a wallpaper of its own beside the scene's own style.
   const kind = typeof flags.kind === "string" ? flags.kind : null;
-  if (kind && !["comb", "ascii", "pixel", "native"].includes(kind)) throw new Error(`--kind ${kind}: one of comb, ascii, pixel, native`);
+  if (kind && !["comb", "ascii", "pixel", "native", "ink"].includes(kind)) throw new Error(`--kind ${kind}: one of comb, ascii, pixel, native, ink`);
   const id = sceneEntry(dir).id + (kind ? `-${kind}` : "");
   const name = (meta.hivescape?.name ?? id) + (kind ? ` (${kind === "ascii" ? "ASCII" : kind})` : ""), description = meta.hivescape?.description ?? meta.description;
   const root = path.resolve(flags.out ?? path.join(ROOT, "out", "hivemind"));
@@ -134,6 +134,8 @@ export async function pack(dir, flags) {
   writeFileSync(path.join(folder, "dist", "main.js"), await buildHivemind(dir, kind ? { kind } : {}));
   copyFileSync(path.join(ROOT, "packages/render/fonts/OFL.txt"), path.join(folder, "OFL.txt"));
   copyFileSync(path.join(ROOT, "LICENSE"), path.join(folder, "LICENSE"));
+  // A scene made from someone's work (a painting) carries its credit: title, artist, collection, licence.
+  if (meta.hivescape?.credit) writeFileSync(path.join(folder, "CREDITS.txt"), `${name} is made from:\n\n${meta.hivescape.credit}\n`);
   // The picker's picture: the scene at 960 x 600, dark, as WebP.
   const site = tmp("pack");
   writeWeb(site, await buildWeb(dir));

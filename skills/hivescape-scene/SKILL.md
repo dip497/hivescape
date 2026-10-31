@@ -27,6 +27,7 @@ its ritual) and go further than the obvious version.
 | A built world, terraces, objects with tops and sides | `isometric()` | `native` (cells lose the detail) |
 | Growing things, petals, birds: illustration | side-on | `native` (Garden of the day) |
 | Anything meant to read as character art; type, code, signal | any | `ascii` |
+| A painting or a photograph, alive | the painting's own | `ink`, with `@hivescape/paintings` |
 
 For `ascii`, paint thin things (grass, reeds, rigging) as strokes about 2 px wide, so they come out
 as `| / \ -`, and give flat areas some shading (a gradient down each tier, a lit side), because a
@@ -35,6 +36,35 @@ body's characters follow its lightness: a flat colour is a wall of one character
 Cells have a size: a comb cell of 13-15 px means a shape needs about 5 cells across to read. Size
 creatures and objects for the cell, not for the screen: a koi is 170-240 px long and a third as
 wide. If what you want to show cannot be read at 5 cells, choose `native` for that scene.
+
+### A living painting
+
+`defineMasterwork` (`@hivescape/paintings`) turns a painting into a scene, shown in `ink`. It is the
+fastest way to a picture of the highest quality, and the right one for a tradition's own art (a
+deity, a woodblock print, an ink landscape) that drawing it ourselves would only imitate.
+
+1. **Find a painting that is free to use.** The Met's Open Access works are public domain under
+   CC0: `https://collectionapi.metmuseum.org/public/collection/v1.1/search?q=<subject>&hasImages=true&isPublicDomain=true`,
+   then `/public/collection/v1/objects/<id>` for its record. Use only a record with
+   `isPublicDomain: true`, and its `primaryImage` (the full scan). Check the record, not your
+   memory, for the title, maker, date, medium and accession number.
+2. **Prefer a wide painting with large shapes.** A cell is 7 x 13 px, so a face needs about 12
+   cells across to read; a portrait painting on a wide screen is cut to its middle, so frame it with
+   `focus` on what matters (crown to knees, not the whole figure), or choose a wider work. A scan
+   older and smaller than about 1200 px across comes out as blocks: find another.
+3. **Bundle it**: at most about 1400-1600 px on its long side, JPEG quality ~78 (ink samples a
+   1440 px screen at about 820 x 280 points; more is only weight, and the picture is in the bundle
+   twice). Put it at `src/painting.jpg` and `import image from "./painting.jpg"`.
+4. **`crop`** to the painted area (no paper, mount or roller), **`focus`** on what must stay in view.
+5. **Effects where the painter put them**, in the cropped painting's fractions: `water` on water,
+   `wind` on a field or trees, `rain`, `mist` in bands between hills, `birds` in open sky, `fall`
+   (petals, leaves, snow), `glow` on a lamp or a halo. Keep them calm: a still painting that breathes,
+   not a busy one.
+6. **Credit it** in `package.json` as `hivescape.credit`: title, maker, date, medium, the collection,
+   its accession number, and the licence. `pack` writes it beside the wallpaper.
+7. **Depict a sacred image with respect**: show it whole and upright, no effect on the figure itself
+   except light (a halo that breathes), nothing comic, and leave out works whose subject would be
+   unwelcome behind someone's work (a cremation ground, a battle).
 
 ## 3. Paint colour, let light make brightness
 

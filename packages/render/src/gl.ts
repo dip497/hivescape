@@ -11,12 +11,12 @@
 import { ATLAS_COLS, ATLAS_ROWS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
 import { CUT } from "./ascii.js";
-import { KEY, type FrameInput } from "./frame.js";
+import { INK, KEY, type FrameInput } from "./frame.js";
 import { LS, SS, type AnyCanvas } from "./surface.js";
 
 const MAX_RIPPLES = 8;
 const MAX_RAMP = 16;
-const KIND = { comb: 0, ascii: 1, pixel: 2, native: 3 } as const;
+const KIND = { comb: 0, ascii: 1, pixel: 2, native: 3, ink: 4 } as const;
 const EDGES = 12;
 
 const HASH = /* glsl */ `
@@ -96,6 +96,8 @@ uniform float uRamp[${MAX_RAMP}];
 uniform float uRampLen;
 uniform float uEdge[${EDGES}];
 uniform vec4 uLook;
+uniform float uSharp;
+uniform int uDark;
 out vec2 vP;
 out vec2 vWorld;
 flat out vec2 vHalf;
@@ -145,13 +147,51 @@ void main() {
   vSlot = -1.0; vEmit = 0.0; vBlur = 0.0; vBody = 0.0;
   float size = 0.0;
   if (a >= uTile.y) size = a >= uTile.x ? 1.0 : 0.38 + 0.62 * sqrt((a - uTile.y) / max(uTile.x - uTile.y, 1e-3));
+  // ink covers every cell: its ground hides the backdrop, which the picture already holds.
+  if (uKind == 4) size = 1.0;
   if (size <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float height = uSurf.x * size + ring * 1.1;
   if (uLit == 1) vEmit = smoothstep(0.78, 1.0, dot(textureLod(uLight, centre / uSpan, 0.0).rgb, vec3(0.299, 0.587, 0.114)));
   vec2 half_;
   float alpha = uKind == 2 && a < uTile.x ? a : 1.0;
   vec2 offset = vec2(0.0);
-  if (uKind == 1) {
+  if (uKind == 4) {
+    // ink: the cell's samples as brightness. A sharp change across it is a line along the change;
+    // otherwise a character as dense as the cell is bright (as dark, on a light page).
+    float Lu[${SS * SS}];
+    vec3 sum = vec3(0.0);
+    ivec2 b0 = ivec2(i, j) * ${SS};
+    for (int v = 0; v < ${SS}; v++) for (int u = 0; u < ${SS}; u++) {
+      vec4 t = texelFetch(uPic, b0 + ivec2(u, v), 0);
+      Lu[v * ${SS} + u] = dot(t.rgb, vec3(0.299, 0.587, 0.114));
+      sum += t.rgb;
+    }
+    c = sum / ${SS * SS}.0;
+    float gx = 0.0, gy = 0.0;
+    for (int k = 0; k < ${SS}; k++) {
+      gx += Lu[k * ${SS} + 2] + Lu[k * ${SS} + 3] - Lu[k * ${SS}] - Lu[k * ${SS} + 1];
+      gy += Lu[2 * ${SS} + k] + Lu[3 * ${SS} + k] - Lu[k] - Lu[${SS} + k];
+    }
+    gx /= ${SS * 2}.0; gy /= ${SS * 2}.0;
+    float lm = dot(c, vec3(0.299, 0.587, 0.114));
+    // How strongly the character shows (frame.ts's inkStrength): faint in a flat cell, full in detail.
+    float q = 0.0;
+    for (int k = 0; k < ${SS * SS}; k++) q += (Lu[k] - lm) * (Lu[k] - lm);
+    vBody = min(1.0, sqrt(q / ${SS * SS}.0) * ${INK.detail}.0);
+    if (length(vec2(gx, gy)) > uSharp) {
+      // The edge runs across the change: turn the change's direction (in pixels) a quarter round.
+      float ang = atan(gy / uCell.y, gx / uCell.x) + PI * 0.5;
+      float m = mod(ang, PI);
+      int e = m < PI / 8.0 || m > 7.0 * PI / 8.0 ? 5 : (m > 3.0 * PI / 8.0 && m < 5.0 * PI / 8.0 ? 7 : (m < PI / 2.0 ? 9 : 8));
+      vSlot = uEdge[e];
+    } else {
+      // frame.ts's inkTone: brightness (darkness on light), calmed where the cell is flat.
+      float tone = (uDark == 1 ? lm : 1.0 - lm) * (${INK.calm} + ${1 - INK.calm} * vBody);
+      vSlot = uRamp[int(clamp(floor(tone * 1.12 * uRampLen), 0.0, uRampLen - 1.0))];
+    }
+    half_ = uCell * 0.5;
+    height = 0.0;
+  } else if (uKind == 1) {
     // ascii: read the cell as a shape from its samples (kernel.ts's cellShapes), then pick its character.
     float sw = 0.0, sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0;
     ivec2 b0 = ivec2(i, j) * ${SS};
@@ -187,10 +227,11 @@ void main() {
     half_ = max((uCell - uTile.z) * 0.5, vec2(0.5)) * size * (1.0 + ring * 0.08);
   }
   // As a cell rises it moves toward the key light, and its shadow lengthens away from it.
-  if (uKind != 1) offset = KEY.xy * ring * uCell.y * 0.16;
-  vec2 pad = uKind == 1 ? uCell * 0.5 - half_ + 1.0 : vec2(1.0);
+  if (uKind == 4) offset = vec2(0.0, -ring * uCell.y * 0.5);
+  else if (uKind != 1) offset = KEY.xy * ring * uCell.y * 0.16;
+  vec2 pad = uKind == 1 ? uCell * 0.5 - half_ + 1.0 : vec2(uKind == 4 ? 0.5 : 1.0);
   if (uPass == 0) {
-    if (uKind == 1 || uShadow.a <= 0.0 || height <= 0.01 || vEmit > 0.6) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+    if (uKind == 1 || uKind == 4 || uShadow.a <= 0.0 || height <= 0.01 || vEmit > 0.6) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
     offset = -KEY.xy * uCell.y * (0.1 + 0.26 * height);
     vBlur = uCell.y * (0.12 + 0.2 * height);
     pad += vBlur;
@@ -244,6 +285,22 @@ float sd(vec2 p) {
   return uHex == 1 ? sdHex(p, vHalf.x, k) : sdBox(p, vHalf, k);
 }
 void main() {
+  if (uKind == 4) {
+    // ink (frame.ts's inkColours): the cell's own colour, lit, as its ground (dimmed on dark, washed on
+    // light) and its character (brightened on dark, deepened on light).
+    vec3 col = shade(vFill, vec3(0.0, 0.0, 1.0), vWorld, 0.0);
+    col = mix(col, vFill * 1.15 + lightAt(vWorld, 0.0) * 0.3, vEmit);
+    float d = vBody;
+    col = clamp(vec3(dot(col, vec3(0.299, 0.587, 0.114))) + (col - vec3(dot(col, vec3(0.299, 0.587, 0.114)))) * ${INK.sat}, 0.0, 1.0);
+    vec3 ground = uDark == 1 ? col * mix(${INK.dark.flat}, ${INK.dark.ground}, d) : col + (1.0 - col) * mix(${INK.light.flat}, ${INK.light.ground}, d);
+    // A seam under each row, as a screen's scan lines.
+    if (vP.y > uCell.y * 0.5 - 1.0) ground *= uDark == 1 ? ${INK.dark.seam} : ${INK.light.seam};
+    vec3 ink = uDark == 1 ? min(col * mix(${INK.dark.flat + 0.2}, ${INK.dark.ink}, d) + ${INK.dark.lift} * d, 1.0) : col * mix(0.8, ${INK.light.ink}, d);
+    vec2 slot = vec2(mod(vSlot, ${ATLAS_COLS}.0), floor(vSlot / ${ATLAS_COLS}.0));
+    float g = texture(uAtlas, (slot + clamp(vP / uCell + 0.5, 0.0, 1.0)) / vec2(${ATLAS_COLS}.0, ${ATLAS_ROWS}.0)).a;
+    o = vec4(mix(ground, ink, g * (${INK.faint} + ${1 - INK.faint} * d)), 1.0);
+    return;
+  }
   if (uKind == 1) {
     // ascii, lit flat: the picture's colour under the scene's lights and the torch.
     vec3 col = shade(vFill, vec3(0.0, 0.0, 1.0), vWorld, 0.0);
@@ -591,6 +648,7 @@ export class GLBackend implements Backend {
       for (let k = 0; k < EDGES; k++) this.edges[k] = f.edges[k] ?? 0;
       gl.uniform1fv(u.uEdge!, this.edges);
       gl.uniform1i(u.uDark!, f.look.dark ? 1 : 0);
+      gl.uniform1f(u.uSharp!, style.edge);
       const count = grid.cols * grid.rows;
       if (sh && style.relief > 0 && style.kind !== "ascii") { gl.uniform1i(u.uPass!, 0); gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count); }
       gl.uniform1i(u.uPass!, 1);

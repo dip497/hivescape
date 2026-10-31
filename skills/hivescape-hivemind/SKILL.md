@@ -20,7 +20,9 @@ node packages/cli/bin/hivescape.mjs pack scenes/campfire --out out/hivemind --pa
 ```
 
 Each `pack` adds `wallpapers/<scene>/` (`dist/main.js`, `hivemind-wallpaper.json`, `preview.webp`,
-the licences) and lists it in `hivemind-package.json`. The first one packed is the package's
+the licences, and `CREDITS.txt` when the scene's `package.json` has a `hivescape.credit`: a living
+painting must) and lists it in `hivemind-package.json`. A painting is in the bundle as base64, twice
+(the worker and the page): keep its file under about 400 KB. The first one packed is the package's
 `startup.wallpaper`, offered once when it is installed. The package id must be `@owner/name`.
 
 ## Check, install, look

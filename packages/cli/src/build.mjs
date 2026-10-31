@@ -25,6 +25,8 @@ async function bundle(contents, resolveDir, opts) {
     bundle: true, write: false, minify: opts.minify ?? true, target: "es2022", platform: "browser",
     format: opts.format, tsconfig: TSCONFIG, logLevel: "warning", legalComments: "none",
     external: opts.external ?? [], define: opts.define ?? {},
+    // A scene's pictures come with it (a wallpaper may fetch nothing): bytes as base64.
+    loader: { ".jpg": "base64", ".jpeg": "base64", ".webp": "base64", ".png": "base64" },
   });
   return r.outputFiles[0].text;
 }

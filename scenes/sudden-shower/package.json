@@ -1,0 +1,15 @@
+{
+  "name": "@hivescape/scene-sudden-shower",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Hiroshige's Sudden Shower over Shin-Ohashi Bridge and Atake (1857), alive: the rain falls, the river runs.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "hivescape": {
+    "name": "Sudden Shower",
+    "description": "Hiroshige's Sudden Shower over Shin-Ohashi Bridge and Atake (1857), alive: the rain falls, the river runs.",
+    "credit": "Utagawa Hiroshige, Sudden Shower over Shin-Ōhashi Bridge and Atake, from One Hundred Famous Views of Edo, 1857. Woodblock print, ink and colour on paper. The Metropolitan Museum of Art (JP2522), Open Access, CC0."
+  }
+}

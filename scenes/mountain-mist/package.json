@@ -1,0 +1,15 @@
+{
+  "name": "@hivescape/scene-mountain-mist",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Song Nian's ink landscape of 1898, alive: mist drifts through the valleys, the pines stir, birds cross the sky.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "hivescape": {
+    "name": "Mountain Mist",
+    "description": "Song Nian's ink landscape of 1898, alive: mist drifts through the valleys, the pines stir, birds cross the sky.",
+    "credit": "Song Nian, Landscape (a section), dated 1898. Handscroll, ink and colour on paper. The Metropolitan Museum of Art (1986.267.76), Open Access, CC0."
+  }
+}

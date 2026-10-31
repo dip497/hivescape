@@ -21,6 +21,7 @@
       "@hivescape/runtime": ["packages/runtime/src/index.ts"],
       "@hivescape/runtime/*": ["packages/runtime/src/*"],
       "@hivescape/hivemind": ["packages/hivemind/src/index.ts"],
+      "@hivescape/paintings": ["packages/paintings/src/index.ts"],
       "@hivemind/view-sdk": ["packages/hivemind/vendor/view-sdk/index.ts"]
     }
   },

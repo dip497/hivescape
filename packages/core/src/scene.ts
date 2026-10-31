@@ -34,10 +34,13 @@ export interface Size {
  * - `ascii`: character cells, as a terminal draws them. A body is a block of its colour with a
  *   character cut into it; an edge is a light character alone, chosen by where the shape sits in
  *   the cell (`. , _ ' " ( )`); a thin stroke is a line character along its direction (`- | / \`).
+ * - `ink`: the whole frame in characters, in the picture's own colours on a dark ground, as an
+ *   ASCII shader draws: each character follows the edges and grain inside its cell (grass leaning
+ *   in the wind `/ / /`, steps and beams `= -`, posts `|`, leaves `0 O * +`).
  * - `pixel`: square cells, flat or in relief.
  * - `native`: the picture at full resolution, lit and glowing: plain 2D (or 2.5D) illustration.
  */
-export type StyleKind = "comb" | "ascii" | "pixel" | "native";
+export type StyleKind = "comb" | "ascii" | "ink" | "pixel" | "native";
 
 /** How the picture is shown. A scene suggests one; the host (or the person) may choose another. */
 export interface StyleSpec {
@@ -71,6 +74,8 @@ export interface StyleSpec {
   glow: number;
   /** How often a body's character changes on its own, per second (ascii; 0 keeps them still). */
   flicker: number;
+  /** How sharp a change of brightness inside a cell must be to be drawn as a line along it (ink). */
+  edge: number;
 }
 
 /** What an agent is doing: at work, ready for a task, waiting on the person, or stopped or asleep. */

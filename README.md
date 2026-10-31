@@ -39,6 +39,58 @@ blocks of its colour with characters cut into them, dense in shadow and sparse i
 | ![Koi Pond in the ascii style: koi as blocks of characters with bracketed edges](docs/images/koi-ascii.webp) | ![Close-up of an ascii koi: red patches of * + = cut into white blocks, ( ) at its sides](docs/images/koi-ascii-close.webp) |
 | ![Campfire in the ascii style: firs of x % # with ( ) edges, the fire in tongues of + = *, grass as \\ \| /](docs/images/campfire-ascii.webp) | ![Koi Pond in ascii behind the Hivemind canvas](docs/images/in-hivemind-ascii.webp) |
 
+## Living paintings
+
+Public-domain masterworks, alive, in the **ink** style: each cell of the screen is a character in the
+painting's own colours, the way an ASCII shader draws. Where the painting is flat (a sky, paper) a
+cell keeps near its own colour with a faint character, so the picture reads from across the room;
+where it has detail, the ground darkens and the character brightens, so the characters draw the
+brushwork. Outlines become lines that join from cell to cell (`─ │ ╱ ╲`), and a seam under each row
+gives the scan lines of a screen. Effects laid over the painting move it: rain over Hiroshige's
+bridge, mist through Song Nian's valleys, wind in Bruegel's wheat, Lakshmi's halo breathing.
+
+| Lakshmi (India, 1883) | Sudden Shower (Japan, 1857) |
+|---|---|
+| ![Lakshmi in ink: the goddess crowned, her halo glowing, in a red sari, the wheat and the tree behind her](docs/images/painting-lakshmi.webp) | ![Hiroshige's bridge in ink, rain falling over the walkers](docs/images/painting-sudden-shower.webp) |
+| **Mountain Mist (China, 1898)** | **The Harvest (Flanders, 1565)** |
+| ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) | ![Bruegel's Harvesters in ink: the wheat field, the reapers under the pear tree, the village beyond](docs/images/painting-harvest.webp) |
+| **By day** | **Up close** |
+| ![Lakshmi in ink on a light look, like an engraving](docs/images/painting-lakshmi-light.webp) | ![Close-up of the crown and halo: cells of colour, characters, joined lines, scan lines](docs/images/painting-close.webp) |
+
+A painting is a scene in a dozen lines:
+
+```ts
+import { defineMasterwork } from "@hivescape/paintings";
+import image from "./painting.jpg"; // bundled into the wallpaper: it fetches nothing
+
+export default defineMasterwork({
+  id: "sudden-shower",
+  name: "Sudden Shower",
+  description: "Hiroshige's bridge in the rain, alive.",
+  image,
+  crop: [0.095, 0.07, 0.91, 0.93], // the print, out of its paper
+  focus: [0.5, 0.62],              // kept in view whatever the screen's shape
+  effects: [
+    { kind: "water", region: [0, 0.27, 1, 0.53], amp: 3 },
+    { kind: "rain", count: 300, angle: 0.06, colour: "#2c3440", alpha: 0.45, length: 34, speed: 1100 },
+  ],
+});
+```
+
+Effects are placed in the painting's own fractions, so they stay on the water whatever the screen:
+`water`, `wind`, `rain`, `mist`, `birds`, `fall` (petals, leaves, snow) and `glow`. The credit goes in
+the scene's `package.json` (`hivescape.credit`) and `pack` puts it beside the wallpaper.
+
+The four paintings are from [The Metropolitan Museum of Art's Open Access](https://www.metmuseum.org/about-the-met/policies-and-documents/open-access)
+collection, public domain and released under CC0:
+
+| Scene | Painting |
+|---|---|
+| Lakshmi | *Lakshmi*, Calcutta Art Studio, Kolkata, 1883 (2021.202) |
+| Sudden Shower | Utagawa Hiroshige, *Sudden Shower over Shin-Ōhashi Bridge and Atake*, 1857 (JP2522) |
+| Mountain Mist | Song Nian, *Landscape* (a section), 1898 (1986.267.76) |
+| The Harvest | Pieter Bruegel the Elder, *The Harvesters*, 1565 (19.164) |
+
 ## Your agents, as creatures
 
 A scene can show the person's agents: Hivemind tells it each agent (its program, what it is doing)
@@ -85,6 +137,7 @@ in `/ \ _ |` and the bees are characters too.
   | `ascii` | Character cells, as a terminal draws them: a body is a block with a character cut into it, an edge the light character that sits where the shape does (`. , ' ( )`), a thin stroke a line character along it (`- \| / \`). |
   | `pixel` | Square cells, flat or in relief. |
   | `native` | The picture itself at full resolution, lit and glowing: plain 2D illustration. |
+  | `ink` | The whole frame in characters, as an ASCII shader draws: each cell its colour, a character in a brighter shade over it, lines along edges. Made for paintings and photographs. |
 
 - **Lit.** `light()` paints what glows. Each cell is shaded from the direction its light comes
   from, a cell inside strong light shines on its own, and the light glows over the ground.
@@ -175,6 +228,7 @@ still, and the pointer and clicks over open canvas.
 | `@hivescape/render` | The renderer. WebGL2 where there is a GPU: about four draw calls a frame, whatever the cell count, and the picture is never read back. A Canvas2D fallback for everything else. |
 | `@hivescape/runtime` | `mount(element, scene)` for a page, and `serveScene(scene)` to run a scene in a worker on an OffscreenCanvas. |
 | `@hivescape/hivemind` | The Hivemind live wallpaper adapter. |
+| `@hivescape/paintings` | `defineMasterwork`: a painting as a living scene, its crop, focus and effects. |
 | `@hivescape/cli` | `dev`, `shot`, `bench`, `build` and `pack`. |
 
 How it works, and why it is built this way, is in [docs/architecture.md](docs/architecture.md).
@@ -182,5 +236,7 @@ What it costs is in [docs/performance.md](docs/performance.md).
 
 ## Licence
 
-MIT. The bundled JetBrains Mono (used for the ascii style) is under the SIL Open Font License; see
-`packages/render/fonts/OFL.txt`.
+MIT. The bundled JetBrains Mono (used for the ascii and ink styles) is under the SIL Open Font
+License; see `packages/render/fonts/OFL.txt`. The paintings in `scenes/lakshmi`, `scenes/sudden-shower`,
+`scenes/mountain-mist` and `scenes/harvest` are public domain (The Met, CC0); each scene's
+`package.json` credits its own.

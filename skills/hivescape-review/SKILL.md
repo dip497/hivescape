@@ -19,6 +19,10 @@ plugin wallpapers (`hivemind-plugins/packages/*/wallpapers/*/preview.webp`) or t
 version, at the same size, in one picture. If the new one is not at least as good, it is not done,
 however new its technique.
 
+A screen has two device pixels a CSS pixel, and character styles (`ascii`, `ink`) look coarser at
+one: shoot those with `--dpr 2` before you judge them. For `ink`, also put a full-size crop beside the
+look you are aiming at (the reference, at the same zoom).
+
 `shot` writes four moments in each look (running, the pointer resting, a click, after) and a
 contact sheet. Look at the sheet first, then crop to full size where the detail is (a creature, the
 light source) and look again.
@@ -45,7 +49,11 @@ Answer each with a picture in front of you. One "no" is a fix, not a note.
    shadows there, and partly covered cells are fainter rather than smaller: that is expected).
 9. **Cost.** `bench`: Canvas2D under 20 ms of script a frame at 1440 x 900 at both pixel ratios;
    WebGL's script time under 5 ms. A GPU frame rate is valid only on a real GPU (SwiftShader lies).
-10. **Tests.** Scene tests cover first frame, pointer, click and an hour of clicks, and each fails
+10. **A painting (ink).** The painting reads from across the room (its tones, its main figure);
+    flat areas are quiet, not walls of `0`; outlines are joined lines; the effects sit on the
+    painted water, field or sky; its credit is in `package.json` and matches the collection's
+    record.
+11. **Tests.** Scene tests cover first frame, pointer, click and an hour of clicks, and each fails
     when its behaviour is broken.
 
 Report what you looked at (the files) and what you changed for each "no".

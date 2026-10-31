@@ -37,6 +37,8 @@ importers:
 
   packages/hivemind: {}
 
+  packages/paintings: {}
+
   packages/render: {}
 
   packages/runtime: {}
@@ -45,7 +47,19 @@ importers:
 
   scenes/campfire: {}
 
+  scenes/garden: {}
+
+  scenes/harvest: {}
+
+  scenes/hive: {}
+
   scenes/koi: {}
+
+  scenes/lakshmi: {}
+
+  scenes/mountain-mist: {}
+
+  scenes/sudden-shower: {}
 
 packages:
 

@@ -5,6 +5,12 @@
  */
 import { ctx2d, offscreen, type AnyCanvas } from "./surface.js";
 
+/**
+ * Line characters the atlas draws itself, edge to edge of the cell, so that neighbours join into
+ * one unbroken line as a terminal's box drawing does (a font's `-` and `|` stop short of the cell).
+ */
+export const JOINED = { across: "\u2500", down: "\u2502", up: "\u2571", fall: "\u2572" } as const;
+
 export const ATLAS_COLS = 16;
 export const ATLAS_ROWS = 8;
 const CAPACITY = ATLAS_COLS * ATLAS_ROWS;
@@ -54,9 +60,20 @@ export class Atlas {
     g.textAlign = "center";
     g.textBaseline = "middle";
     g.font = `600 ${Math.round(this.slotH * this.scale)}px "${this.family}", ui-monospace, monospace`;
+    // A joined line is as thick as a stroke of the font, about a ninth of the cell's height.
+    const t = Math.max(1, this.slotH * this.scale * 0.11);
+    g.strokeStyle = "#fff";
+    g.lineWidth = t;
+    g.lineCap = "butt";
     this.chars.forEach((c, i) => {
-      const x = (i % ATLAS_COLS) * this.slotW, y = Math.floor(i / ATLAS_COLS) * this.slotH;
-      g.fillText(c, x + this.slotW / 2, y + this.slotH / 2 + this.slotH * 0.04);
+      const x = (i % ATLAS_COLS) * this.slotW, y = Math.floor(i / ATLAS_COLS) * this.slotH, W = this.slotW, H = this.slotH;
+      if (c === JOINED.across) g.fillRect(x, y + (H - t) / 2, W, t);
+      else if (c === JOINED.down) g.fillRect(x + (W - t) / 2, y, t, H);
+      else if (c === JOINED.up || c === JOINED.fall) {
+        g.save(); g.beginPath(); g.rect(x, y, W, H); g.clip(); g.beginPath();
+        if (c === JOINED.up) { g.moveTo(x, y + H); g.lineTo(x + W, y); } else { g.moveTo(x, y); g.lineTo(x + W, y + H); }
+        g.stroke(); g.restore();
+      } else g.fillText(c, x + W / 2, y + H / 2 + H * 0.04);
     });
     this.version++;
   }

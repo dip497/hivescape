@@ -1,0 +1,17 @@
+{
+  "name": "@hivescape/paintings",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Living paintings: a public-domain masterwork as a Hivescape scene, with water that ripples, rain, mist, wind and birds laid over it.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dip497/hivescape.git",
+    "directory": "packages/paintings"
+  },
+  "homepage": "https://github.com/dip497/hivescape#living-paintings"
+}

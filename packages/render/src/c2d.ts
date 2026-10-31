@@ -12,8 +12,8 @@
 import { clamp, smoothstep } from "@hivescape/core";
 import { ATLAS_COLS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
-import { cellHash, cellSize, KEY, lightness, ringAt, type FrameInput } from "./frame.js";
-import { CUT, bodyGlyph, edgeGlyph } from "./ascii.js";
+import { cellHash, cellSize, INK, inkColours, inkDetail, inkStrength, inkTone, KEY, lightness, ringAt, type FrameInput } from "./frame.js";
+import { CUT, bodyGlyph, edgeGlyph, inkDensity, inkEdge, inkGradient, inkSpread } from "./ascii.js";
 import { averageCells, cellShapes } from "./kernel.js";
 import { ctx2d, LS, offscreen, SS, type AnyCanvas, type Ctx2D, type Grid } from "./surface.js";
 
@@ -66,8 +66,19 @@ export class Canvas2DBackend implements Backend {
   /** One pixel a cell (two a cell across for a comb, so odd rows can sit half a cell over). */
   private tiny: AnyCanvas = offscreen(1, 1);
   private tinyImg: ImageData | null = null;
+  /** ink: the characters' colours, one pixel a cell (`tiny` holds the grounds). */
+  private tinyInk: AnyCanvas = offscreen(1, 1);
+  private tinyInkImg: ImageData | null = null;
   /** The cells composed, before they go onto the layer. */
   private scratch: AnyCanvas = offscreen(1, 1);
+  /**
+   * ink: every cell's character stamped in white, kept from frame to frame. A painting is mostly
+   * still, so a frame restamps only the cells whose character or strength changed (`stamped` holds
+   * what each cell has: its slot and strength, 0 for nothing), not every cell.
+   */
+  private stamps: AnyCanvas = offscreen(1, 1);
+  private stamped = new Uint32Array(0);
+  private stampsKey = "";
   /** Every cell's shape (white) and its bevel, drawn once per grid. */
   private mask: AnyCanvas | null = null;
   private relief: AnyCanvas | null = null;
@@ -165,6 +176,8 @@ export class Canvas2DBackend implements Backend {
         g.restore();
       }
     }
+
+    if (style.kind === "ink") { this.drawInk(f, atlas, L); this.drawOverlay(f, atlas); return; }
 
     if (style.kind === "native") {
       g.drawImage(f.picture as CanvasImageSource, 0, 0, this.w, this.h);
@@ -268,6 +281,82 @@ export class Canvas2DBackend implements Backend {
       void sw; void sh;
     }
     this.drawOverlay(f, atlas);
+  }
+
+  /** ink on the CPU: each cell's character chosen as the GPU does (ink's edge and density rules),
+   *  stamped white, then coloured all at once from an image of one pixel a cell. */
+  private drawInk(f: FrameInput, atlas: Atlas, L: Float32Array | null): void {
+    const { grid, style, pointer } = f, { cols, rows, cw, ch } = grid, g = this.g, n = SS * SS;
+    const px = ctx2d(f.picture, { willReadFrequently: true }).getImageData(0, 0, cols * SS, rows * SS).data;
+    if (this.tiny.width !== cols || this.tiny.height !== rows || !this.tinyImg || !this.tinyInkImg) {
+      this.tiny = offscreen(cols, rows);
+      this.tinyImg = ctx2d(this.tiny).createImageData(cols, rows);
+      this.tinyInk = offscreen(cols, rows);
+      this.tinyInkImg = ctx2d(this.tinyInk).createImageData(cols, rows);
+    }
+    const G = this.tinyImg.data, T = this.tinyInkImg.data, rw = cols * SS * 4, dark = f.look.dark, amb = style.ambient, key = style.key;
+    const torch = style.torch > 0 && pointer.active ? style.torch : 0;
+    const W = this.canvas.width, H = this.canvas.height, s = this.dpr;
+    // The kept stamps hold for one grid, one pixel ratio and one atlas; anything else starts them again.
+    const stampsKey = `${W}x${H}:${cols}x${rows}:${s}:${atlas.version}`;
+    if (stampsKey !== this.stampsKey) {
+      this.stampsKey = stampsKey;
+      this.stamps = offscreen(W, H);
+      this.stamped = new Uint32Array(cols * rows);
+    }
+    const st = ctx2d(this.stamps), was = this.stamped;
+    st.setTransform(s, 0, 0, s, 0, 0);
+    const Lu = new Float32Array(n);
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        let r = 0, gg = 0, b = 0;
+        for (let v = 0; v < SS; v++) for (let u = 0, p = (j * SS + v) * rw + i * SS * 4; u < SS; u++, p += 4) {
+          Lu[v * SS + u] = lightness(px[p]!, px[p + 1]!, px[p + 2]!);
+          r += px[p]!; gg += px[p + 1]!; b += px[p + 2]!;
+        }
+        r /= n; gg /= n; b /= n;
+        const lm = lightness(r, gg, b);
+        const [gx, gy] = inkGradient(Lu, SS);
+        const d = inkDetail(inkSpread(Lu, n));
+        const slot = Math.hypot(gx, gy) > style.edge ? f.edges[inkEdge(gx, gy, cw, ch)]! : f.ramp[inkDensity(inkTone(lm, dark, d), f.ramp.length)]!;
+        // Lit flat, as the GPU lights a character: the key light's share, the scene's light, the torch.
+        const x = (i + 0.5) * cw, y = (j + 0.5) * ch, o = (j * cols + i) * 4;
+        let lr = amb, lg = amb, lb = amb;
+        if (L) { lr += (L[o]! / 255) * 1.7; lg += (L[o + 1]! / 255) * 1.7; lb += (L[o + 2]! / 255) * 1.7; }
+        if (torch) { const att = Math.max(0, 1 - Math.hypot(pointer.x - x, pointer.y - y) / torch) ** 2 * 0.6; lr += (key[0] / 255) * att; lg += (key[1] / 255) * att; lb += (key[2] / 255) * att; }
+        const c = inkColours(Math.min(1, (r / 255) * lr), Math.min(1, (gg / 255) * lg), Math.min(1, (b / 255) * lb), dark, d);
+        G[o] = c[0] * 255; G[o + 1] = c[1] * 255; G[o + 2] = c[2] * 255; G[o + 3] = 255;
+        T[o] = c[3] * 255; T[o + 1] = c[4] * 255; T[o + 2] = c[5] * 255; T[o + 3] = 255;
+        // Restamp the cell only when its character or its strength (in sixteenths) changed.
+        const q = Math.round(inkStrength(d) * 15), now = slot ? ((slot + 1) << 4) | q : 0, k = j * cols + i;
+        if (now === was[k]) continue;
+        was[k] = now;
+        st.clearRect(i * cw, j * ch, cw, ch);
+        if (slot) { st.globalAlpha = q / 15; st.drawImage(this.tints.get(atlas, slot, 255, 255, 255) as CanvasImageSource, i * cw, j * ch, cw, ch); }
+      }
+    }
+    st.globalAlpha = 1;
+    ctx2d(this.tiny).putImageData(this.tinyImg, 0, 0);
+    ctx2d(this.tinyInk).putImageData(this.tinyInkImg, 0, 0);
+    // The characters take their colours: the white stamps, kept only where they are, coloured per cell.
+    if (this.scratch.width !== W || this.scratch.height !== H) this.scratch = offscreen(W, H);
+    const sg = ctx2d(this.scratch);
+    sg.setTransform(1, 0, 0, 1, 0, 0);
+    sg.globalCompositeOperation = "copy";
+    sg.drawImage(this.stamps as CanvasImageSource, 0, 0);
+    sg.globalCompositeOperation = "source-in";
+    sg.imageSmoothingEnabled = false;
+    sg.drawImage(this.tinyInk as CanvasImageSource, 0, 0, cols * cw * s, rows * ch * s);
+    sg.globalCompositeOperation = "source-over";
+    // The grounds, a block of each cell's colour, a seam under each row as a screen's scan lines, then the characters.
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(this.tiny as CanvasImageSource, 0, 0, cols * cw * s, rows * ch * s);
+    g.imageSmoothingEnabled = true;
+    g.fillStyle = `rgba(0,0,0,${1 - (dark ? INK.dark.seam : INK.light.seam)})`;
+    for (let j = 1; j <= rows; j++) g.fillRect(0, Math.round(j * ch * s) - s, cols * cw * s, s);
+    g.drawImage(this.scratch as CanvasImageSource, 0, 0);
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
   private drawOverlay(f: FrameInput, atlas: Atlas): void {
