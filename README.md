@@ -57,14 +57,25 @@ and where their tiles are, and the scene draws a creature for each. **The Hive**
 |---|---|---|
 | ![A bumblebee doing the waggle dance in an attention-coloured ring](docs/images/hive-dance.webp) | ![The Hive by day](docs/images/hive-light.webp) | ![The Hive behind two agent tiles in Hivemind, the pointer over a bee and the app's label naming its agent](docs/images/hive-in-hivemind.webp) |
 
+**Garden of the day** is the second: beds along the bottom, a plot for each agent, bare each
+morning. Every turn an agent finishes grows a plant in its plot (its flower by its program: tulip,
+poppy, sunflower, lavender), so by evening the beds are the day's work. Each agent is a garden bird
+(robin, blue tit, goldfinch, wren): it hops about its plot at work, sits on its stake when ready,
+sleeps there when resting, and when its agent needs you it flies to that agent's tile, **perches on
+the tile's top edge** and sings, while the flowers in its plot slowly wilt until you answer.
+
+| Day | Night | Perched on the tile, singing |
+|---|---|---|
+| ![Garden of the day by day: plots of tulips, poppies, sunflowers and lavender, birds about them](docs/images/garden-light.webp) | ![The garden at night, fireflies over it](docs/images/garden-dark.webp) | ![A blue tit perched on top of an agent's tile, singing, ringed in the attention colour](docs/images/garden-perch.webp) |
+
 In the comb style each wax cell is one of the renderer's own hexagons, so the comb is in relief and
 lit, while the bees are drawn crisp on the front layer over it. In ascii the comb is cells walled
 in `/ \ _ |` and the bees are characters too.
 
 ## What a scene can be
 
-- **Any view.** Top-down (Koi Pond), side-on in layers that part as the pointer moves (Campfire),
-  or isometric (Apiary). `isometric()` maps ground tiles and heights to the screen and back, so the pointer
+- **Any view.** Top-down (Koi Pond, The Hive), side-on (Campfire, in layers that part as the pointer
+  moves; Garden of the day), or isometric (Apiary). `isometric()` maps ground tiles and heights to the screen and back, so the pointer
   lands on the tile under it. `parallax()` shifts a side view's layers by their distance.
 - **Any style.** The same scene can be shown as:
 

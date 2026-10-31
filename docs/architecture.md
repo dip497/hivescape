@@ -126,6 +126,10 @@ crosses: they rise toward the light, catch more of it, and their shadows lengthe
   full-layer draws a frame, whatever the cell count, with no cast shadows. The layer is kept at one
   device pixel per CSS pixel.
 
+A native scene (its whole picture at full resolution) gains nothing from WebGL and would upload a
+full-resolution picture every frame there; when the backend is left to choose, `Engine` draws a
+scene whose style is native on the 2D canvas.
+
 ## Running
 
 - `Engine` (`packages/runtime/src/engine.ts`) owns a scene's world, its clock and its renderer.

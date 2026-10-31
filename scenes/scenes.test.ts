@@ -4,6 +4,7 @@ import koi from "./koi/src/index.ts";
 import campfire from "./campfire/src/index.ts";
 import apiary, { viewOf } from "./apiary/src/index.ts";
 import hive from "./hive/src/index.ts";
+import garden from "./garden/src/index.ts";
 
 type KoiState = ReturnType<typeof koi.create>;
 type CampState = ReturnType<typeof campfire.create>;
@@ -160,5 +161,66 @@ describe("The Hive", () => {
     for (let m = 0; m < 60; m++) { for (let c = 0; c < 6; c++) { sim.click(200 + c * 150, 300); sim.done("agent-1"); } sim.run(60); }
     expect(s.sparks.length).toBeLessThanOrEqual(160);
     for (const b of [...s.bees, ...s.workers]) expect(Number.isFinite(b.x) && Number.isFinite(b.y)).toBe(true);
+  });
+});
+
+describe("Garden of the day", () => {
+  type GardenState = ReturnType<typeof garden.create>;
+  const P = ["claude", "codex", "gemini", "claude", "amp"], S = ["working", "needs-you", "ready", "working", "resting"] as const;
+  const K: Record<string, number> = { claude: 0.1, codex: 0.35, gemini: 0.6, amp: 0.85 };
+  const agents = (states: readonly (typeof S)[number][] = S) => states.map((st, i) => ({ id: "agent-" + (i + 1), program: P[i]!, kind: K[P[i]!]!, size: 0.9, state: st }));
+  const TILES = [{ x0: 432, y0: 180, x1: 806, y1: 450, id: "agent-1" }, { x0: 835, y0: 144, x1: 1181, y1: 378, id: "agent-2" }, { x0: 518, y0: 504, x1: 950, y1: 756, id: "agent-3" }];
+
+  test("a plot and a bird for each agent, its flower by its program, named only by agents' ids", () => {
+    const sim = simulate(garden);
+    sim.agents(agents()); sim.run(0.5);
+    const s = sim.state as GardenState;
+    expect(s.plots.length).toBe(5);
+    expect(s.plots.map((p) => p.plants[0]?.flower)).toEqual(["tulip", "poppy", "sunflower", "tulip", "lavender"]);
+    expect(garden.spots!(s, sim.world).map((p) => p.id)).toEqual(agents().map((a) => a.id));
+    for (let i = 1; i < s.plots.length; i++) expect(s.plots[i]!.x0).toBeGreaterThan(s.plots[i - 1]!.x1);
+  });
+
+  test("each finished turn grows a plant in that agent's plot; past a full plot it adds heads, never more plants", () => {
+    const sim = simulate(garden);
+    sim.agents(agents()); sim.run(0.2);
+    const s = sim.state as GardenState, before = s.plots[2]!.plants.length;
+    sim.done("agent-3"); sim.done("nobody"); sim.run(0.1);
+    expect(s.plots[2]!.plants.length).toBe(before + 1);
+    expect(s.plots[0]!.plants.length).toBe(1);
+    for (let k = 0; k < 200; k++) sim.done("agent-3");
+    expect(s.plots[2]!.plants.length).toBe(16);
+    expect(s.plots[2]!.plants.every((p) => p.heads <= 3)).toBe(true);
+    expect(s.plots[2]!.plants.some((p) => p.heads > 1)).toBe(true);
+  });
+
+  test("the bird whose agent needs you perches on that agent's tile and sings; its plot wilts, and lifts after", () => {
+    const sim = simulate(garden);
+    sim.agents(agents()); sim.tiles(TILES);
+    sim.run(6);
+    const s = sim.state as GardenState, b = s.birds[1]!, t = TILES[1]!;
+    expect(b.phase).toBe("sing");
+    expect(Math.abs(b.y - t.y0)).toBeLessThan(6);
+    expect(b.x > t.x0 && b.x < t.x1).toBe(true);
+    expect(s.notes.length).toBeGreaterThan(0);
+    sim.run(30);
+    expect(s.plots[1]!.wilt).toBeGreaterThan(0.6);
+    expect(s.plots[0]!.wilt).toBe(0);
+    sim.agents(agents(["working", "working", "ready", "working", "resting"])); sim.run(4);
+    expect(s.plots[1]!.wilt).toBe(0);
+  });
+
+  test("a resting agent's bird sleeps on its stake; a click on the soil sows wildflowers, and they stay bounded", () => {
+    const sim = simulate(garden);
+    sim.agents(agents()); sim.run(6);
+    const s = sim.state as GardenState;
+    expect(s.birds[4]!.phase).toBe("sleep");
+    const wild = s.wild.length;
+    sim.click(700, 300); sim.run(0.1);
+    expect(s.wild.length).toBe(wild);
+    sim.click(700, s.ground + 40); sim.run(0.1);
+    expect(s.wild.length).toBe(wild + 3);
+    for (let k = 0; k < 400; k++) { sim.click(100 + (k % 12) * 100, s.ground + 30); sim.run(0.05); }
+    expect(s.wild.length).toBeLessThanOrEqual(60);
   });
 });

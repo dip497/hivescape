@@ -25,6 +25,7 @@ its ritual) and go further than the obvious version.
 | Things moving over a ground: water, a field, a board | top-down | `comb` |
 | A place with depth: a horizon, near and far, sky | side-on, layers with `parallax()` | `comb` |
 | A built world, terraces, objects with tops and sides | `isometric()` | `native` (cells lose the detail) |
+| Growing things, petals, birds: illustration | side-on | `native` (Garden of the day) |
 | Anything meant to read as character art; type, code, signal | any | `ascii` |
 
 For `ascii`, paint thin things (grass, reeds, rigging) as strokes about 2 px wide, so they come out
@@ -74,7 +75,10 @@ a glance. Read `w.agents` each step and keep one creature per agent (add, remove
 - **Paint the creatures in `front`** (crisp over the cells), or in `picture` for ascii.
 - **`spots`** returns a circle or a few per creature, so the host can name it under the pointer.
 - Test with `sim.agents(...)`, `sim.tiles(...)`, `sim.done(id)`: the visit, the honey, the time
-  spent under tiles. Preview with `?agents=5&tiles=1`, shoot with `--agents 5`.
+  spent under tiles. Preview with `?agents=5&tiles=1` (`&turns=40` for a day's finished turns),
+  shoot with `--agents 5 --turns 40`.
+- **Use the tiles themselves**: a creature can sit on a tile's top edge (Garden's birds) or dance
+  beside it (The Hive's bees); the workspace is part of the scene.
 
 ## 6. Motion and interaction
 

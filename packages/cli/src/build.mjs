@@ -116,6 +116,9 @@ hivescape.mount(document.getElementById("stage"), hivescape.scene, opts).then(as
       m.setTiles(tiles);
     }
     let k = 0;
+    // ?turns=N: a day's work done at the start, each agent in turn.
+    const turns = Math.min(200, +(q.get("turns") || 0));
+    for (let i = 0; i < turns; i++) setTimeout(() => m.done(agents[i % agents.length].id), 200 + i * 60);
     setInterval(() => { const working = agents.filter((a) => a.state === "working"); if (working.length) m.done(working[k++ % working.length].id); }, 4000);
     const label = document.getElementById("label");
     Object.assign(label.style, { background: dark ? "#000c" : "#fffc", color: ink });

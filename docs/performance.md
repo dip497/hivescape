@@ -43,6 +43,10 @@ The Hive, with its bees on the full-resolution front layer, at the same size and
 machine: comb 4.2 ms on WebGL and 11.1 ms on Canvas2D at ratio 1 (4.7 and 11.7 at 2); ascii
 2.6 ms and 14.3 ms (2.6 and 15.5 at 2).
 
+Garden of the day, native, on Canvas2D: 4.4 ms at ratio 1 and 7.4 ms at 2 (on WebGL it was 9.6 and
+34.4 ms, the full-resolution upload; so a native scene now takes the 2D canvas when the backend is
+left to choose). In ascii: 3.0 ms on WebGL and 11.7 ms on Canvas2D.
+
 At 30 frames a second, a frame may take 33 ms. Below 20 ms of script, the scene stays under
 Hivemind's 60% limit.
 

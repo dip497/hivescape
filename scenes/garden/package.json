@@ -1,0 +1,9 @@
+{
+  "name": "@hivescape/scene-garden",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Garden of the day: every turn an agent finishes grows a flower in its plot, and its bird perches on the tile of an agent that needs you.",
+  "exports": { ".": "./src/index.ts" },
+  "hivescape": { "name": "Garden of the day", "description": "Every turn an agent finishes grows a flower in its plot; its bird perches on its tile and sings when it needs you." }
+}

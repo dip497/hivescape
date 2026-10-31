@@ -65,7 +65,7 @@ export async function shot(dir, flags) {
   const tiles = [];
   try {
     for (const kind of kinds) for (const look of ["dark", "light"]) {
-      const q = new URLSearchParams({ look, bare: "1", seed: String(flags.seed ?? 1), ...(kind ? { kind } : {}), ...(flags.backend ? { backend: flags.backend } : {}), ...(flags.agents ? { agents: String(flags.agents), tiles: "1" } : {}) });
+      const q = new URLSearchParams({ look, bare: "1", seed: String(flags.seed ?? 1), ...(kind ? { kind } : {}), ...(flags.backend ? { backend: flags.backend } : {}), ...(flags.agents ? { agents: String(flags.agents), tiles: "1" } : {}), ...(flags.turns ? { turns: String(flags.turns) } : {}) });
       const page = await open(browser, `http://127.0.0.1:${port}/?${q}`, w, h);
       const name = `${id}${kind ? "-" + kind : ""}-${look}`;
       const snap = async (step) => { const f = path.join(out, `${name}-${step}.png`); await page.screenshot({ path: f }); tiles.push({ f, label: `${kind || "default"} · ${look} · ${step.slice(1)}` }); };

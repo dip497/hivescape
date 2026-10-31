@@ -52,7 +52,10 @@ export class Engine<S> {
   }
 
   static async create<S>(scene: Scene<S>, layers: Layers, start: EngineStart, opts: EngineOptions = {}): Promise<Engine<S>> {
-    const renderer = await Renderer.create(layers, { backend: opts.backend ?? "auto" });
+    // A native picture gains nothing from WebGL and costs a full-resolution upload a frame there
+    // (34 ms at 2x where the GPU is software): left to choose, it draws on the 2D canvas.
+    const native = resolveStyle(scene.style, start.look, opts.style ?? {}).kind === "native";
+    const renderer = await Renderer.create(layers, { backend: opts.backend ?? (native ? "canvas2d" : "auto") });
     return new Engine(scene, renderer, start, opts);
   }
 
