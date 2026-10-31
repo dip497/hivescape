@@ -90,6 +90,12 @@ if (kind) opts.style = { kind };
 if (q.get("backend")) opts.backend = q.get("backend");
 if (q.get("fps")) opts.fps = +q.get("fps");
 opts.thread = q.get("thread") || "auto";
+// ?film=1: frames come only when the CLI asks (window.__advance(ms)), so a film has every frame at its time, however slow the machine.
+if (q.get("film")) {
+  const film = { t: 0, cb: null, id: 0 };
+  opts.frames = { request(cb) { film.cb = cb; return ++film.id; }, cancel() { film.cb = null; }, now() { return film.t; } };
+  window.__advance = (ms) => { film.t += ms; const cb = film.cb; film.cb = null; if (cb) cb(film.t); };
+}
 opts.workerSource = hivescape.workerSource;
 hivescape.mount(document.getElementById("stage"), hivescape.scene, opts).then(async (m) => {
   window.__mounted = m;

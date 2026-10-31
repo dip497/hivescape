@@ -94,8 +94,14 @@ its tuning for its own kind.
     itself, edge to edge of the cell (`─ │ ╱ ╲`), so neighbours join into one unbroken line;
   - a seam under each row gives the scan lines of a screen.
 
-  `@hivescape/paintings` builds scenes for it from public-domain paintings: the painting covers the
-  screen round its focus, and effects placed in the painting's own fractions move it.
+  `@hivescape/paintings` builds scenes for it from photographs and paintings. Once, when the picture
+  is decoded, it is cut into six layers by depth (a ground from the horizon to the foot, and shapes
+  standing up from it): each holds its band, blurred by its distance from the focus, and behind
+  nearer things the colours round them (push-pull filling), so a near thing the camera moves aside
+  leaves no second copy of itself. Each frame the layers are drawn far to near, each slid and grown
+  for its depth by a slow orbiting camera; only the part of a layer that has anything in it is
+  drawn. A flowing region is two copies of itself sliding along the flow and cross-fading, each
+  invisible at the moment it jumps back, kept inside its soft outline.
 
 ## Light
 
@@ -141,9 +147,9 @@ crosses: they rise toward the light, catch more of it, and their shadows lengthe
   full-layer draws a frame, whatever the cell count, with no cast shadows. The layer is kept at one
   device pixel per CSS pixel.
 
-In ink, the 2D path stamps each cell's character in white onto a layer it keeps from frame to frame,
-and restamps only the cells whose character or strength changed (a painting is mostly still); it
-then colours the stamps per cell in one draw and lays them over the cells' grounds.
+In ink, whose picture moves every frame, the 2D path writes the whole layer into one image: each
+cell's ground (with its seam), then the pixels its character covers, read once out of the atlas. One
+upload and one draw a frame, at one pixel per CSS pixel, whatever moves.
 
 A native scene (its whole picture at full resolution) gains nothing from WebGL and would upload a
 full-resolution picture every frame there; when the backend is left to choose, `Engine` draws a

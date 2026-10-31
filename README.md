@@ -39,53 +39,70 @@ blocks of its colour with characters cut into them, dense in shadow and sparse i
 | ![Koi Pond in the ascii style: koi as blocks of characters with bracketed edges](docs/images/koi-ascii.webp) | ![Close-up of an ascii koi: red patches of * + = cut into white blocks, ( ) at its sides](docs/images/koi-ascii-close.webp) |
 | ![Campfire in the ascii style: firs of x % # with ( ) edges, the fire in tongues of + = *, grass as \\ \| /](docs/images/campfire-ascii.webp) | ![Koi Pond in ascii behind the Hivemind canvas](docs/images/in-hivemind-ascii.webp) |
 
-## Living paintings
+## Living pictures
 
-Public-domain masterworks, alive, in the **ink** style: each cell of the screen is a character in the
-painting's own colours, the way an ASCII shader draws. Where the painting is flat (a sky, paper) a
-cell keeps near its own colour with a faint character, so the picture reads from across the room;
-where it has detail, the ground darkens and the character brightens, so the characters draw the
-brushwork. Outlines become lines that join from cell to cell (`─ │ ╱ ╲`), and a seam under each row
-gives the scan lines of a screen. Effects laid over the painting move it: rain over Hiroshige's
-bridge, mist through Song Nian's valleys, wind in Bruegel's wheat, Lakshmi's halo breathing.
+A photograph or a painting, made to move the way a camera moving through it would, in the **ink**
+style. The picture is cut into layers by how far each part is, and a slow camera orbits it: near
+things slide across far ones, the picture breathes in and out, it leans a little toward the pointer,
+and what is far from the focus goes soft. Water and cloud flow where the picture has them. Under a
+fixed grid of characters the picture keeps moving, so every character keeps changing and the frame
+seems to pour.
 
-| Lakshmi (India, 1883) | Sudden Shower (Japan, 1857) |
+| Gèdres (a photograph, 1853) | Sudden Shower (Japan, 1857) |
 |---|---|
-| ![Lakshmi in ink: the goddess crowned, her halo glowing, in a red sari, the wheat and the tree behind her](docs/images/painting-lakshmi.webp) | ![Hiroshige's bridge in ink, rain falling over the walkers](docs/images/painting-sudden-shower.webp) |
-| **Mountain Mist (China, 1898)** | **The Harvest (Flanders, 1565)** |
-| ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) | ![Bruegel's Harvesters in ink: the wheat field, the reapers under the pear tree, the village beyond](docs/images/painting-harvest.webp) |
-| **By day** | **Up close** |
-| ![Lakshmi in ink on a light look, like an engraving](docs/images/painting-lakshmi-light.webp) | ![Close-up of the crown and halo: cells of colour, characters, joined lines, scan lines](docs/images/painting-close.webp) |
+| ![Joseph Vigier's photograph of Gèdres in ink, moving: the river pours over the rapids under the bridge as the village slides past the mountain](docs/images/film-gedres.webp) | ![Hiroshige's bridge in ink, moving: rain over the walkers, the river running, the bridge sliding across the far shore](docs/images/film-sudden-shower.webp) |
+| **Lakshmi (India, 1883)** | **The Harvest (Flanders, 1565)** |
+| ![Lakshmi in ink, moving: the goddess before the hills as the camera orbits, her halo breathing](docs/images/film-lakshmi.webp) | ![Bruegel's Harvesters in ink, moving: the pear tree sliding across the far fields, the wheat in the wind](docs/images/film-harvest.webp) |
 
-A painting is a scene in a dozen lines:
+Each cell is a block of the picture's own colour with a character in a brighter shade over it.
+Where the picture is flat (a sky, paper) the cell keeps near its colour with a faint character, so
+the picture reads from across the room; where it has detail the ground darkens and the character
+brightens, so the characters draw the brushwork. Outlines become lines that join from cell to cell
+(`─ │ ╱ ╲`), and a seam under each row gives a screen's scan lines.
+
+| Mountain Mist (China, 1898), still | Lakshmi by day | Up close |
+|---|---|---|
+| ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) | ![Lakshmi in ink on a light look, like an engraving](docs/images/painting-lakshmi-light.webp) | ![Close-up of the crown and halo: cells of colour, characters, joined lines, scan lines](docs/images/painting-close.webp) |
+
+A picture is a scene in a few lines: where it is near and far, and what moves.
 
 ```ts
 import { defineMasterwork } from "@hivescape/paintings";
 import image from "./painting.jpg"; // bundled into the wallpaper: it fetches nothing
 
 export default defineMasterwork({
-  id: "sudden-shower",
-  name: "Sudden Shower",
-  description: "Hiroshige's bridge in the rain, alive.",
+  id: "gedres",
+  name: "Gèdres",
+  description: "A village in the Pyrenees, its river pouring over the rapids.",
   image,
-  crop: [0.095, 0.07, 0.91, 0.93], // the print, out of its paper
-  focus: [0.5, 0.62],              // kept in view whatever the screen's shape
+  levels: 0.6,                                    // a faded print, its tones stretched back
+  depth: {
+    horizon: 0.655, far: 0.45, near: 1,           // the ground, from the bridge's foot to the viewer
+    shapes: [                                      // things standing up, the nearest last
+      { poly: [[0, 0], [0.4, 0.13], [1, 0.1], [1, 0.66], [0, 0.66]], z: 0.3 },        // the wooded valley
+      { poly: [[0.42, 0.38], [0.66, 0.38], [0.75, 0.7], [0.4, 0.7]], z: 0.48 },        // the hotel and the bridge
+    ],
+  },
+  sharp: { depth: 0.6, range: 0.3, blur: 2.5 },  // the far mountain goes soft
   effects: [
-    { kind: "water", region: [0, 0.27, 1, 0.53], amp: 3 },
-    { kind: "rain", count: 300, angle: 0.06, colour: "#2c3440", alpha: 0.45, length: 34, speed: 1100 },
+    { kind: "flow", region: [[0.29, 0.72], [0.72, 0.71], [0.75, 0.82], [0.3, 0.86]], dir: [0.12, 1], speed: 0.012 },
   ],
 });
 ```
 
-Effects are placed in the painting's own fractions, so they stay on the water whatever the screen:
-`water`, `wind`, `rain`, `mist`, `birds`, `fall` (petals, leaves, snow) and `glow`. The credit goes in
-the scene's `package.json` (`hivescape.credit`) and `pack` puts it beside the wallpaper.
+Everything is placed in the picture's own fractions, so it holds whatever the screen's shape. The
+effects are `flow` (water, cloud), `wind`, `rain`, `mist`, `birds`, `fall` (petals, leaves, snow)
+and `glow`. The credit goes in the scene's `package.json` (`hivescape.credit`) and `pack` puts it
+beside the wallpaper. `film` records a scene moving, every frame at its own time, to review it (or
+to show it): `node packages/cli/bin/hivescape.mjs film scenes/gedres --backend webgl2 --webp`. The
+`hivescape-living-picture` skill teaches an agent to do all of it from any picture you give it.
 
-The four paintings are from [The Metropolitan Museum of Art's Open Access](https://www.metmuseum.org/about-the-met/policies-and-documents/open-access)
+The five pictures are from [The Metropolitan Museum of Art's Open Access](https://www.metmuseum.org/about-the-met/policies-and-documents/open-access)
 collection, public domain and released under CC0:
 
-| Scene | Painting |
+| Scene | Picture |
 |---|---|
+| Gèdres | Joseph Vigier, *Village de Gèdres, Route de Gavarnie*, 1853, salted paper print (2005.100.503.10) |
 | Lakshmi | *Lakshmi*, Calcutta Art Studio, Kolkata, 1883 (2021.202) |
 | Sudden Shower | Utagawa Hiroshige, *Sudden Shower over Shin-Ōhashi Bridge and Atake*, 1857 (JP2522) |
 | Mountain Mist | Song Nian, *Landscape* (a section), 1898 (1986.267.76) |
@@ -151,6 +168,7 @@ in `/ \ _ |` and the bees are characters too.
 pnpm install
 pnpm dev                                     # Koi Pond at http://127.0.0.1:5174/ (?look=light, ?kind=ascii, ?backend=canvas2d)
 node packages/cli/bin/hivescape.mjs shot scenes/campfire --kind comb,native   # pictures and a contact sheet, dark and light
+node packages/cli/bin/hivescape.mjs film scenes/gedres --webp                 # an MP4 (and WebP) of it moving
 node packages/cli/bin/hivescape.mjs bench scenes/koi                          # time per frame, per backend and style
 pnpm test                                    # unit and scene tests
 ```
@@ -212,11 +230,12 @@ still, and the pointer and clicks over open canvas.
 
 ## Skills for agents
 
-`skills/` holds three skills (linked into `.claude/skills` for Claude Code); any agent can read them:
+`skills/` holds four skills (linked into `.claude/skills` for Claude Code); any agent can read them:
 
 | Skill | Teaches |
 |---|---|
 | `hivescape-scene` | Designing and writing a scene that is its own, top-down, side-on or isometric. |
+| `hivescape-living-picture` | Making a photograph or painting a living scene: depth, camera, flowing water, filming it. |
 | `hivescape-review` | The quality bar: contact sheets, what to look for, the cost budget, the tests. |
 | `hivescape-hivemind` | Packing scenes as Hivemind wallpapers, checking, installing and publishing them. |
 
@@ -228,7 +247,7 @@ still, and the pointer and clicks over open canvas.
 | `@hivescape/render` | The renderer. WebGL2 where there is a GPU: about four draw calls a frame, whatever the cell count, and the picture is never read back. A Canvas2D fallback for everything else. |
 | `@hivescape/runtime` | `mount(element, scene)` for a page, and `serveScene(scene)` to run a scene in a worker on an OffscreenCanvas. |
 | `@hivescape/hivemind` | The Hivemind live wallpaper adapter. |
-| `@hivescape/paintings` | `defineMasterwork`: a painting as a living scene, its crop, focus and effects. |
+| `@hivescape/paintings` | `defineMasterwork`: a photograph or painting as a living scene, in depth layers a camera orbits, with flowing water and other effects. |
 | `@hivescape/cli` | `dev`, `shot`, `bench`, `build` and `pack`. |
 
 How it works, and why it is built this way, is in [docs/architecture.md](docs/architecture.md).
@@ -237,6 +256,6 @@ What it costs is in [docs/performance.md](docs/performance.md).
 ## Licence
 
 MIT. The bundled JetBrains Mono (used for the ascii and ink styles) is under the SIL Open Font
-License; see `packages/render/fonts/OFL.txt`. The paintings in `scenes/lakshmi`, `scenes/sudden-shower`,
-`scenes/mountain-mist` and `scenes/harvest` are public domain (The Met, CC0); each scene's
-`package.json` credits its own.
+License; see `packages/render/fonts/OFL.txt`. The pictures in `scenes/gedres`, `scenes/lakshmi`,
+`scenes/sudden-shower`, `scenes/mountain-mist` and `scenes/harvest` are public domain (The Met, CC0);
+each scene's `package.json` credits its own.

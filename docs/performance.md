@@ -47,11 +47,12 @@ Garden of the day, native, on Canvas2D: 4.4 ms at ratio 1 and 7.4 ms at 2 (on We
 34.4 ms, the full-resolution upload; so a native scene now takes the 2D canvas when the backend is
 left to choose). In ascii: 3.0 ms on WebGL and 11.7 ms on Canvas2D.
 
-The living paintings, in ink, 14 420 cells, on the same machine: on WebGL 3.2 ms at ratio 1 and
-3.3 ms at 2 (The Harvest). On Canvas2D, The Harvest takes 14.0 ms at ratio 1 and 14.3 ms at 2, and
-Sudden Shower, whose rain changes the most cells, 17.1 and 17.6 ms. Drawn naively, a character
-stamped in every cell every frame, The Harvest took 61.4 ms on Canvas2D; the stamps are now kept
-and only changed cells restamped.
+The living pictures, in ink, 14 420 cells, the camera moving (so the picture changes every frame),
+The Harvest: 7.6 ms on WebGL at ratio 1 and 8.1 ms at 2, most of it painting the six depth layers;
+on Canvas2D 14.7 ms and 14.5 ms. The 2D path writes the whole ink layer into one image a frame;
+stamping a character per cell with the canvas took 61.4 ms. The layers draw only the part of
+themselves that has anything in it, and a flow composes only inside its own box: before those, the
+picture alone took about 11 ms.
 
 At 30 frames a second, a frame may take 33 ms. Below 20 ms of script, the scene stays under
 Hivemind's 60% limit.

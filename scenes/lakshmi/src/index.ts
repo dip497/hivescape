@@ -14,9 +14,20 @@ export default defineMasterwork({
   image,
   crop: [0.155, 0.16, 0.85, 0.875],
   // Crown to knees on a wide screen; a taller one shows the lotus pond below her too.
-  focus: [0.5, 0.4],
+  focus: [0.5, 0.36],
+  // The sky and hills far off, the wheat and the pond nearer, the tree beside her, then the goddess on
+  // her rock, and the shells and the lotus nearest.
+  depth: {
+    horizon: 0.4, far: 0.25, near: 0.8,
+    shapes: [
+      { poly: [[0.72, 0.17], [0.9, 0.16], [1, 0.17], [1, 0.76], [0.72, 0.76]], z: 0.45 },
+      { poly: [[0.53, 0.16], [0.6, 0.17], [0.62, 0.24], [0.6, 0.3], [0.68, 0.33], [0.74, 0.4], [0.77, 0.5], [0.8, 0.6], [0.85, 0.7], [0.8, 0.76], [0.7, 0.8], [0.6, 0.85], [0.52, 0.9], [0.45, 0.88], [0.38, 0.84], [0.33, 0.76], [0.33, 0.62], [0.36, 0.55], [0.33, 0.48], [0.36, 0.4], [0.42, 0.4], [0.47, 0.35], [0.48, 0.27], [0.5, 0.2]], z: 0.7 },
+      { poly: [[0.6, 0.78], [0.85, 0.72], [1, 0.7], [1, 1], [0.38, 1], [0.38, 0.86], [0.5, 0.88]], z: 0.9 },
+    ],
+  },
+  sharp: { depth: 0.7, range: 0.25, blur: 2 },
   effects: [
-    { kind: "water", region: [0, 0.74, 0.6, 1], amp: 2.5, speed: 0.8 },
+    { kind: "flow", region: [[0, 0.73], [0.38, 0.74], [0.42, 0.82], [0.36, 1], [0, 1]], dir: [-1, 0.05], speed: 0.004 },
     { kind: "wind", region: [0, 0.49, 0.42, 0.7], amp: 2, speed: 0.7 },
     { kind: "wind", region: [0.82, 0.18, 1, 0.6], amp: 1.5, speed: 0.6 },
     { kind: "mist", bands: [0.08, 0.2, 0.32], colour: "#f2efe6", alpha: 0.18, speed: 6 },

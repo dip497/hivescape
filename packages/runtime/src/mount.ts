@@ -6,7 +6,7 @@
  * Hivemind wallpaper, told the pointer by the app) passes `input: "manual"` and `size` and calls
  * `point`, `click` and `resize` itself.
  */
-import { DARK, type Agent, type Look, type Mode, type Scene, type Size, type Spot, type StyleSpec, type Tile } from "@hivescape/core";
+import { DARK, type Agent, type Frames, type Look, type Mode, type Scene, type Size, type Spot, type StyleSpec, type Tile } from "@hivescape/core";
 import type { BackendChoice } from "@hivescape/render";
 import { Engine } from "./engine.js";
 import type { FromWorker, ToWorker } from "./messages.js";
@@ -19,6 +19,8 @@ export interface MountOptions {
   style?: Partial<StyleSpec>;
   backend?: BackendChoice;
   fps?: number;
+  /** Where frames come from, on the main thread (default: the display's). A film steps its own. */
+  frames?: Frames;
   /** `auto` runs in a worker when `workerSource` is given and OffscreenCanvas exists. */
   thread?: "auto" | "main" | "worker";
   /** The scene's worker script as text (a Hivescape build provides it). */
@@ -76,7 +78,7 @@ export async function mount<S>(el: HTMLElement, scene: Scene<S>, opts: MountOpti
   const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const mode: Mode = opts.mode ?? (reduce ? "still" : "run");
   const canWorker = typeof OffscreenCanvas !== "undefined" && "transferControlToOffscreen" in cells && !!opts.workerSource;
-  const useWorker = opts.thread === "worker" ? true : opts.thread === "main" ? false : canWorker;
+  const useWorker = opts.frames ? false : opts.thread === "worker" ? true : opts.thread === "main" ? false : canWorker;
   const engineOpts = { ...(opts.seed !== undefined ? { seed: opts.seed } : {}), ...(opts.style ? { style: opts.style } : {}), ...(opts.backend ? { backend: opts.backend } : {}), ...(opts.fps ? { fps: opts.fps } : {}) };
 
   // Where the creatures were in the last frame: the hit test answers from this, on this thread.
@@ -109,7 +111,7 @@ export async function mount<S>(el: HTMLElement, scene: Scene<S>, opts: MountOpti
       destroy: () => { worker.postMessage({ type: "stop" }); worker.terminate(); },
     };
   } else {
-    const engine = await Engine.create(scene, { backdrop, cells, front }, { size: measure(), look, mode }, engineOpts);
+    const engine = await Engine.create(scene, { backdrop, cells, front }, { size: measure(), look, mode }, { ...engineOpts, ...(opts.frames ? { frames: opts.frames } : {}) });
     engine.onDrawn = () => opts.onDrawn?.();
     engine.onSpots = (s) => { spots = s; };
     driver = {

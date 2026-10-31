@@ -1,6 +1,7 @@
-// hivescape dev | shot | bench | pack | build
+// hivescape dev | shot | film | bench | pack | build
 import { createServer } from "node:http";
-import { mkdirSync, readFileSync, writeFileSync, existsSync, copyFileSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, copyFileSync, statSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as esbuild from "esbuild";
@@ -86,6 +87,56 @@ export async function shot(dir, flags) {
     console.log(`shots: ${out}\nsheet: ${sheet}`);
     return sheet;
   } finally { await browser.close(); server.close(); }
+}
+
+/**
+ * A film of the scene, to see how it moves: every frame is stepped at its own time (the page runs on
+ * frames the CLI gives it), so the film plays as the scene runs on a fast machine however slow this
+ * one is; a software GPU only makes it take longer. Writes an MP4 (and, with --webp, an animated WebP).
+ * Needs ffmpeg.
+ */
+export async function film(dir, flags) {
+  const { id } = sceneEntry(dir);
+  if (spawnSync("ffmpeg", ["-version"]).status !== 0) throw new Error("film needs ffmpeg on PATH");
+  const fps = +(flags.fps ?? 30), seconds = +(flags.seconds ?? 8), w = +(flags.w ?? 1280), h = +(flags.h ?? 720), dpr = +(flags.dpr ?? 1);
+  const look = String(flags.look ?? "dark"), kind = flags.kind ? String(flags.kind) : "";
+  const name = `${id}${kind ? "-" + kind : ""}-${look}`;
+  const out = path.resolve(flags.out ?? path.join(ROOT, "out", "films"));
+  mkdirSync(out, { recursive: true });
+  const frames = tmp("film-" + name);
+  const site = tmp("film");
+  writeWeb(site, await buildWeb(dir));
+  const server = await serve(site, 0);
+  const browser = await launch();
+  try {
+    const q = new URLSearchParams({ look, bare: "1", film: "1", seed: String(flags.seed ?? 1), ...(kind ? { kind } : {}), ...(flags.backend ? { backend: String(flags.backend) } : {}) });
+    const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
+    page.on("pageerror", (e) => console.error("page:", e.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/?${q}`);
+    await page.waitForFunction(() => typeof window.__advance === "function" && !!window.__mounted, null, { timeout: 30_000 });
+    // A picture the scene decodes takes a moment of real time; then the film starts at the scene's first second.
+    await page.waitForTimeout(+(flags.wait ?? 1.5) * 1000);
+    const dt = 1000 / fps, n = Math.round(seconds * fps), skip = Math.round(+(flags.from ?? 0) * fps);
+    for (let k = 0; k < skip; k++) await page.evaluate((ms) => window.__advance(ms), dt);
+    for (let k = 0; k < n; k++) {
+      // --pointer: the pointer sweeps slowly across and back, to show what follows it.
+      if (flags.pointer) await page.mouse.move(w * (0.5 + 0.38 * Math.sin((2 * Math.PI * k) / n)), h * (0.5 + 0.12 * Math.sin((4 * Math.PI * k) / n)));
+      await page.evaluate((ms) => window.__advance(ms), dt);
+      await page.screenshot({ path: path.join(frames, `f${String(k).padStart(5, "0")}.png`) });
+      if (k % fps === 0) process.stdout.write(`\r${name}: ${k}/${n} frames`);
+    }
+    process.stdout.write("\n");
+    const mp4 = path.join(out, `${name}.mp4`);
+    const enc = (args) => { const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-framerate", String(fps), "-i", path.join(frames, "f%05d.png"), ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); };
+    enc(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "slow", "-movflags", "+faststart", mp4]);
+    console.log(`film: ${mp4}`);
+    if (flags.webp) {
+      const webp = path.join(out, `${name}.webp`);
+      enc(["-vf", `scale=${Math.min(960, w)}:-1:flags=lanczos`, "-loop", "0", "-c:v", "libwebp", "-quality", "70", "-compression_level", "6", webp]);
+      console.log(`film: ${webp}`);
+    }
+    return mp4;
+  } finally { await browser.close(); server.close(); rmSync(frames, { recursive: true, force: true }); }
 }
 
 /** Script time per frame and frames a second, per backend and style, with the frame cap off. */

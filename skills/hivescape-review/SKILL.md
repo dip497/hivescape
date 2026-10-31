@@ -49,10 +49,10 @@ Answer each with a picture in front of you. One "no" is a fix, not a note.
    shadows there, and partly covered cells are fainter rather than smaller: that is expected).
 9. **Cost.** `bench`: Canvas2D under 20 ms of script a frame at 1440 x 900 at both pixel ratios;
    WebGL's script time under 5 ms. A GPU frame rate is valid only on a real GPU (SwiftShader lies).
-10. **A painting (ink).** The painting reads from across the room (its tones, its main figure);
-    flat areas are quiet, not walls of `0`; outlines are joined lines; the effects sit on the
-    painted water, field or sky; its credit is in `package.json` and matches the collection's
-    record.
+10. **A living picture (ink).** It reads from across the room (its tones, its main figure); flat
+    areas are quiet, not walls of `0`; outlines are joined lines; its credit is in `package.json`
+    and matches the collection's record. Its motion is reviewed on a `film`, not on stills: the
+    checklist is in `hivescape-living-picture`.
 11. **Tests.** Scene tests cover first frame, pointer, click and an hour of clicks, and each fails
     when its behaviour is broken.
 
