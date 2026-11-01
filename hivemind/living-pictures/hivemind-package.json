@@ -1,0 +1,29 @@
+{
+  "apiVersion": 2,
+  "id": "@dip497/living-pictures",
+  "name": "Living pictures",
+  "version": "0.1.0",
+  "wallpapers": [
+    {
+      "path": "wallpapers/ejiri"
+    },
+    {
+      "path": "wallpapers/lakshmi"
+    },
+    {
+      "path": "wallpapers/harvest"
+    },
+    {
+      "path": "wallpapers/gedres"
+    },
+    {
+      "path": "wallpapers/sudden-shower"
+    },
+    {
+      "path": "wallpapers/mountain-mist"
+    }
+  ],
+  "startup": {
+    "wallpaper": "@dip497/living-pictures/ejiri"
+  }
+}

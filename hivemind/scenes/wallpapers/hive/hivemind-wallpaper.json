@@ -1,0 +1,7 @@
+{
+  "protocol": 1,
+  "name": "The Hive",
+  "entry": "dist/main.js",
+  "description": "A honeycomb where each agent is a bee: honey fills its cells as turns finish, and a bee whose agent needs you dances beside its tile.",
+  "preview": "preview.webp"
+}

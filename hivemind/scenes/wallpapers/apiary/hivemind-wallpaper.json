@@ -1,0 +1,7 @@
+{
+  "protocol": 1,
+  "name": "Apiary",
+  "entry": "dist/main.js",
+  "description": "An isometric island apiary: bees work the flowers between their hives; click a tile to plant flowers.",
+  "preview": "preview.webp"
+}

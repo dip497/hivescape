@@ -1,0 +1,7 @@
+{
+  "protocol": 1,
+  "name": "Sudden Shower",
+  "entry": "dist/main.js",
+  "description": "Hiroshige's Sudden Shower over Shin-Ohashi Bridge and Atake (1857), alive: the rain falls, the river runs.",
+  "preview": "preview.webp"
+}

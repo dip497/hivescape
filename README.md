@@ -217,8 +217,14 @@ The full contract is in [`packages/core/src/scene.ts`](packages/core/src/scene.t
 
 ## In Hivemind
 
-`hivemind/aurora` is the Aurora scene packed as a package, `@dip497/aurora`, ready to publish:
-`hivehub publish --repo dip497/hivescape --path hivemind/aurora --ref main`.
+`hivemind/` holds the scenes packed as packages, each ready to publish with
+`hivehub publish --repo dip497/hivescape --path hivemind/<folder> --ref main`:
+
+| Folder | Package | Wallpapers |
+|---|---|---|
+| `hivemind/aurora` | `@dip497/aurora` | Aurora |
+| `hivemind/living-pictures` | `@dip497/living-pictures` | Ejiri, Lakshmi, The Harvest, Gèdres, Sudden Shower, Mountain Mist |
+| `hivemind/scenes` | `@dip497/hivescape-scenes` | The Hive, Koi Pond, Campfire, Apiary, Garden of the day |
 
 Every scene can be a [Hivemind](https://github.com/dip497/hivemind) live wallpaper:
 

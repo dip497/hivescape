@@ -1,0 +1,7 @@
+{
+  "protocol": 1,
+  "name": "Mountain Mist",
+  "entry": "dist/main.js",
+  "description": "Song Nian's ink landscape of 1898, alive: mist drifts through the valleys, cloud moves on the far peaks, the pines stir.",
+  "preview": "preview.webp"
+}
