@@ -4,3 +4,6 @@ dist/
 out/
 *.log
 bench/kernel/target/
+
+# A packed package to publish keeps its built script.
+!hivemind/*/wallpapers/*/dist/
