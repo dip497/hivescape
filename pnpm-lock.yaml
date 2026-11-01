@@ -45,6 +45,8 @@ importers:
 
   scenes/apiary: {}
 
+  scenes/aurora: {}
+
   scenes/campfire: {}
 
   scenes/ejiri: {}

@@ -1,0 +1,7 @@
+{
+  "protocol": 1,
+  "name": "Aurora",
+  "entry": "dist/main.js",
+  "description": "The aurora australis from the International Space Station, alive: waves of light sweep along its curtains over the Earth, the stars still.",
+  "preview": "preview.webp"
+}

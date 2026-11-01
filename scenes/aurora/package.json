@@ -1,0 +1,15 @@
+{
+  "name": "@hivescape/scene-aurora",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "The aurora australis from the International Space Station, alive: waves of light sweep along its curtains over the Earth, the stars still.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "hivescape": {
+    "name": "Aurora",
+    "description": "The aurora australis from the International Space Station, alive: waves of light sweep along its curtains over the Earth, the stars still.",
+    "credit": "The aurora australis over the southern Indian Ocean, photographed from the International Space Station by the Expedition 65 crew, August 2, 2021 (NASA, iss065e214281). NASA imagery is not protected by copyright in the United States; NASA does not endorse this work."
+  }
+}

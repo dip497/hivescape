@@ -94,11 +94,12 @@ map** of where it changes, to check that only what should move does:
 `node packages/cli/bin/hivescape.mjs film scenes/gedres --backend webgl2 --webp`. The
 `hivescape-living-picture` skill teaches an agent to do all of it from any picture you give it.
 
-The six pictures are from [The Metropolitan Museum of Art's Open Access](https://www.metmuseum.org/about-the-met/policies-and-documents/open-access)
-collection, public domain and released under CC0:
+The paintings and the 1853 photograph are from [The Metropolitan Museum of Art's Open Access](https://www.metmuseum.org/about-the-met/policies-and-documents/open-access)
+collection, public domain and released under CC0; the aurora is NASA's:
 
 | Scene | Picture |
 |---|---|
+| Aurora | The aurora australis from the International Space Station, Expedition 65 crew, 2021 (NASA, iss065e214281; not protected by copyright) |
 | Ejiri | Katsushika Hokusai, *Ejiri in Suruga Province*, from *Thirty-six Views of Mount Fuji*, about 1830-32 (JP12) |
 | Gèdres | Joseph Vigier, *Village de Gèdres, Route de Gavarnie*, 1853, salted paper print (2005.100.503.10) |
 | Lakshmi | *Lakshmi*, Calcutta Art Studio, Kolkata, 1883 (2021.202) |
@@ -209,6 +210,9 @@ The full contract is in [`packages/core/src/scene.ts`](packages/core/src/scene.t
 
 ## In Hivemind
 
+`hivemind/aurora` is the Aurora scene packed as a package, `@dip497/aurora`, ready to publish:
+`hivehub publish --repo dip497/hivescape --path hivemind/aurora --ref main`.
+
 Every scene can be a [Hivemind](https://github.com/dip497/hivemind) live wallpaper:
 
 ```bash
@@ -255,5 +259,5 @@ What it costs is in [docs/performance.md](docs/performance.md).
 
 MIT. The bundled JetBrains Mono (used for the ascii and ink styles) is under the SIL Open Font
 License; see `packages/render/fonts/OFL.txt`. The pictures in `scenes/ejiri`, `scenes/gedres`, `scenes/lakshmi`,
-`scenes/sudden-shower`, `scenes/mountain-mist` and `scenes/harvest` are public domain (The Met, CC0);
+`scenes/sudden-shower`, `scenes/mountain-mist` and `scenes/harvest` are public domain (The Met, CC0), and `scenes/aurora`'s is NASA's (not protected by copyright);
 each scene's `package.json` credits its own.
