@@ -5,7 +5,7 @@
  * lights every frame, and keeps its own time for each, so a calm scene costs a calm amount.
  */
 import type { Look, Overlay, Rgb, Scene, Size, StyleSpec, World } from "@hivescape/core";
-import { ASCII_EDGES, INK_EDGES } from "./ascii.js";
+import { ASCII_EDGES, INK_STROKES } from "./ascii.js";
 import { Atlas } from "./atlas.js";
 import type { Backend, BackendChoice } from "./backend.js";
 import { Canvas2DBackend } from "./c2d.js";
@@ -101,9 +101,9 @@ export class Renderer {
       if (c.height !== bh) c.height = bh;
     }
     this.backend.resize(size.w, size.h, size.dpr);
-    this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "ascii" ? 0.82 : style.kind === "ink" ? 0.86 : 0.6);
+    this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "ascii" ? 0.82 : style.kind === "ink" ? 0.95 : 0.6);
     this.ramp = this.atlas.slots(style.ramp || " ");
-    this.edges = this.atlas.slots(style.kind === "ink" ? INK_EDGES : ASCII_EDGES);
+    this.edges = this.atlas.slots(style.kind === "ink" ? INK_STROKES : ASCII_EDGES);
     this.backdropDirty = true;
   }
 

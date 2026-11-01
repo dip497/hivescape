@@ -7,15 +7,15 @@
  * once per size. Five full-layer draws a frame, whatever the cell count; no cast shadows. The layer
  * is kept at one device pixel per CSS pixel: the CSS scales it on a denser screen. Characters (the
  * ascii style's and the overlay's) are stamped one by one from a tinted copy of their own slot; a
- * body's cut character is one black copy at a fixed strength, so it needs no tint per colour. ink,
- * whose picture may move every frame, is written whole into one image instead: each cell's ground,
- * then its character's covered pixels (read once out of the atlas), then one upload and one draw.
+ * body's cut character is one black copy at a fixed strength, so it needs no tint per colour. ink
+ * draws the picture beneath, then writes every cell's character (its covered pixels, read once out of
+ * the atlas) into one image laid over it, with a glow from a quarter-size copy of that image.
  */
 import { clamp, smoothstep } from "@hivescape/core";
 import { ATLAS_COLS, ATLAS_ROWS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
-import { cellHash, cellSize, INK, inkColours, inkDetail, inkStrength, inkTone, KEY, lightness, ringAt, type FrameInput } from "./frame.js";
-import { CUT, bodyGlyph, edgeGlyph, inkDensity, inkEdge, inkGradient, inkSpread } from "./ascii.js";
+import { cellHash, cellSize, INK, inkColour, KEY, lightness, ringAt, type FrameInput } from "./frame.js";
+import { CUT, bodyGlyph, edgeGlyph, inkGlyph, inkTexture } from "./ascii.js";
 import { averageCells, cellShapes } from "./kernel.js";
 import { ctx2d, LS, offscreen, SS, type AnyCanvas, type Ctx2D, type Grid } from "./surface.js";
 
@@ -74,12 +74,14 @@ export class Canvas2DBackend implements Backend {
   /** The cells composed, before they go onto the layer. */
   private scratch: AnyCanvas = offscreen(1, 1);
   /**
-   * ink, written whole into one image each frame at one pixel per CSS pixel: every cell's ground and
-   * its character, from the character's coverage read once out of the atlas (`inkMasks`). One upload
-   * and one draw a frame, whatever moves: a moving picture changes every cell.
+   * ink: every cell's character, coloured, written into one image a frame at the screen's own
+   * resolution (transparent between characters, so they stay crisp on a dense screen), from each
+   * character's coverage read once out of the atlas; then laid over the picture in one draw, with its
+   * glow from a quarter-size copy of itself.
    */
   private inkLayer: AnyCanvas = offscreen(1, 1);
   private inkImg: ImageData | null = null;
+  private inkGlow: AnyCanvas = offscreen(1, 1);
   private inkMasks: (InkMask | null)[] = [];
   private inkMasksKey = "";
   /** Every cell's shape (white) and its bevel, drawn once per grid. */
@@ -302,56 +304,71 @@ export class Canvas2DBackend implements Backend {
     return masks;
   }
 
-  /** ink: each cell read from its samples (the rules in frame.ts), then its ground and character written into one image. */
+  /** ink (the rules in ascii.ts and frame.ts): the picture beneath, then each cell's character over it, glowing; scan lines. */
   private drawInk(f: FrameInput, atlas: Atlas, L: Float32Array | null): void {
-    const { grid, style, pointer } = f, { cols, rows } = grid, g = this.g, n = SS * SS;
-    const cw = Math.round(grid.cw), ch = Math.round(grid.ch), OW = cols * cw, OH = rows * ch;
-    const px = ctx2d(f.picture, { willReadFrequently: true }).getImageData(0, 0, cols * SS, rows * SS).data;
+    const { grid, style, pointer } = f, { cols, rows } = grid, g = this.g, K = SS, n = K * K;
+    // Cells in device pixels: the characters are written at the screen's own resolution.
+    const cw = Math.round(grid.cw * this.dpr), ch = Math.round(grid.ch * this.dpr), OW = cols * cw, OH = rows * ch;
+    const px = ctx2d(f.picture, { willReadFrequently: true }).getImageData(0, 0, cols * K, rows * K).data;
     if (this.inkLayer.width !== OW || this.inkLayer.height !== OH || !this.inkImg) {
       this.inkLayer = offscreen(OW, OH);
       this.inkImg = ctx2d(this.inkLayer).createImageData(OW, OH);
+      this.inkGlow = offscreen(Math.max(1, Math.ceil(OW / 4)), Math.max(1, Math.ceil(OH / 4)));
     }
     const out = new Uint32Array(this.inkImg.data.buffer), masks = this.masksFor(atlas, cw, ch);
-    const rw = cols * SS * 4, dark = f.look.dark, amb = style.ambient, key = style.key, seam = dark ? INK.dark.seam : INK.light.seam;
+    out.fill(0);
+    const rw = cols * K * 4, dark = f.look.dark, amb = style.ambient, key = style.key, seam = dark ? INK.seam.dark : INK.seam.light;
     const torch = style.torch > 0 && pointer.active ? style.torch : 0;
     const Lu = new Float32Array(n);
     for (let j = 0; j < rows; j++) {
       for (let i = 0; i < cols; i++) {
         let r = 0, gg = 0, b = 0;
-        for (let v = 0; v < SS; v++) for (let u = 0, p = (j * SS + v) * rw + i * SS * 4; u < SS; u++, p += 4) {
-          Lu[v * SS + u] = lightness(px[p]!, px[p + 1]!, px[p + 2]!);
+        for (let v = 0; v < K; v++) for (let u = 0, p = (j * K + v) * rw + i * K * 4; u < K; u++, p += 4) {
+          Lu[v * K + u] = lightness(px[p]!, px[p + 1]!, px[p + 2]!);
           r += px[p]!; gg += px[p + 1]!; b += px[p + 2]!;
         }
         r /= n; gg /= n; b /= n;
         const lm = lightness(r, gg, b);
-        const [gx, gy] = inkGradient(Lu, SS);
-        const d = inkDetail(inkSpread(Lu, n));
-        const slot = Math.hypot(gx, gy) > style.edge ? f.edges[inkEdge(gx, gy, grid.cw, grid.ch)]! : f.ramp[inkDensity(inkTone(lm, dark, d), f.ramp.length)]!;
+        const pick = inkGlyph(dark ? lm : 1 - lm, inkTexture(Lu, K, grid.cw, grid.ch), f.ramp.length);
+        if (pick[0] === 0) continue;
+        const slot = pick[0] === 1 ? f.edges[pick[1]]! : f.ramp[pick[1]]!, M = masks[slot];
+        if (!M) continue;
         // Lit flat, as the GPU lights a character: the key light's share, the scene's light, the torch.
         const x = (i + 0.5) * grid.cw, y = (j + 0.5) * grid.ch, o = (j * cols + i) * 4;
         let lr = amb, lg = amb, lb = amb;
         if (L) { lr += (L[o]! / 255) * 1.7; lg += (L[o + 1]! / 255) * 1.7; lb += (L[o + 2]! / 255) * 1.7; }
         if (torch) { const att = Math.max(0, 1 - Math.hypot(pointer.x - x, pointer.y - y) / torch) ** 2 * 0.6; lr += (key[0] / 255) * att; lg += (key[1] / 255) * att; lb += (key[2] / 255) * att; }
-        const c = inkColours(Math.min(1, (r / 255) * lr), Math.min(1, (gg / 255) * lg), Math.min(1, (b / 255) * lb), dark, d);
-        const G0 = c[0] * 255, G1 = c[1] * 255, G2 = c[2] * 255, I0 = c[3] * 255, I1 = c[4] * 255, I2 = c[5] * 255;
-        // The ground, with a seam under each row as a screen's scan lines (the cell's last line darker).
-        const ground = 0xff000000 | (G2 << 16) | (G1 << 8) | G0, sg = 0xff000000 | ((G2 * seam) << 16) | ((G1 * seam) << 8) | (G0 * seam);
-        const top = j * ch * OW + i * cw;
-        for (let yy = 0, q = top; yy < ch; yy++, q += OW) { const v = yy === ch - 1 ? sg : ground; for (let xx = 0; xx < cw; xx++) out[q + xx] = v; }
-        // Then the character, only where it covers the cell.
-        const M = slot ? masks[slot] : null;
-        if (!M) continue;
-        const a = inkStrength(d), mx = M.x, my = M.y, mc = M.cover;
-        for (let p = 0; p < mc.length; p++) {
-          const t = mc[p]! * a, yy = my[p]!, k = yy === ch - 1 ? seam : 1, g0 = G0 * k, g1 = G1 * k, g2 = G2 * k;
-          out[top + yy * OW + mx[p]!] = 0xff000000 | ((g2 + (I2 - g2) * t) << 16) | ((g1 + (I1 - g1) * t) << 8) | (g0 + (I0 - g0) * t);
-        }
+        const st = pick[2], c = inkColour(Math.min(1, (r / 255) * lr), Math.min(1, (gg / 255) * lg), Math.min(1, (b / 255) * lb), dark, st);
+        const cr = (c[0] * 255) | 0, cg = (c[1] * 255) | 0, cb = (c[2] * 255) | 0, top = j * ch * OW + i * cw;
+        for (let q = 0, mx = M.x, my = M.y, mc = M.cover; q < mc.length; q++) out[top + my[q]! * OW + mx[q]!] = (((mc[q]! * st * 255) | 0) << 24) | (cb << 16) | (cg << 8) | cr;
       }
     }
     ctx2d(this.inkLayer).putImageData(this.inkImg, 0, 0);
     g.setTransform(1, 0, 0, 1, 0, 0);
+    // The picture beneath, darkened (washed toward the page on a light look).
     g.imageSmoothingEnabled = true;
-    g.drawImage(this.inkLayer as CanvasImageSource, 0, 0, OW * this.dpr, OH * this.dpr);
+    g.globalCompositeOperation = "source-over";
+    g.drawImage(f.picture as CanvasImageSource, 0, 0, OW, OH);
+    if (dark) g.fillStyle = `rgba(0,0,0,${1 - INK.base.dark})`;
+    else g.fillStyle = `rgba(${f.look.page[0]},${f.look.page[1]},${f.look.page[2]},${INK.base.light})`;
+    g.fillRect(0, 0, OW, OH);
+    if (dark) {
+      // The characters' glow (a quarter-size copy, spread back out), then the characters, both added on.
+      const gl = ctx2d(this.inkGlow);
+      gl.clearRect(0, 0, this.inkGlow.width, this.inkGlow.height);
+      gl.imageSmoothingEnabled = true;
+      gl.drawImage(this.inkLayer as CanvasImageSource, 0, 0, this.inkGlow.width, this.inkGlow.height);
+      g.globalCompositeOperation = "lighter";
+      g.globalAlpha = INK.glow;
+      g.drawImage(this.inkGlow as CanvasImageSource, 0, 0, OW, OH);
+      g.globalAlpha = 1;
+    }
+    g.drawImage(this.inkLayer as CanvasImageSource, 0, 0);
+    g.globalCompositeOperation = "source-over";
+    // A seam under each row, as a screen's scan lines.
+    g.fillStyle = `rgba(0,0,0,${1 - seam})`;
+    const sw = Math.max(1, Math.round(this.dpr));
+    for (let j = 1; j <= rows; j++) g.fillRect(0, j * ch - sw, OW, sw);
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 

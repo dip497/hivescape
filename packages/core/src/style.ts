@@ -32,7 +32,7 @@ export const STYLES: Record<StyleKind, StyleSpec> = {
   ascii: { ...BASE, kind: "ascii", cell: [9, 13], ramp: ".:-=+*x%#@", gap: 1, threshold: 0.58, soft: 0.1, torch: 150 },
   // Small cells, the whole frame: characters from sparse to dense as the picture brightens on the
   // dark ground, and lines where its brightness changes sharply inside a cell.
-  ink: { ...BASE, kind: "ink", cell: [7, 13], ramp: " .:;+=*oO0#@", soft: 0.035, torch: 160, glow: 0.35 },
+  ink: { ...BASE, kind: "ink", cell: [8, 12], ramp: " .-:*+=%o#@", soft: 0.035, torch: 160, glow: 0.35 },
   pixel: { ...BASE, kind: "pixel", cell: [8, 8], soft: 0.5, relief: 0.3, gloss: 0.2 },
   native: { ...BASE, kind: "native", cell: [1, 1], soft: 0, threshold: 0 },
 };

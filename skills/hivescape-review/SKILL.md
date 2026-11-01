@@ -20,8 +20,9 @@ version, at the same size, in one picture. If the new one is not at least as goo
 however new its technique.
 
 A screen has two device pixels a CSS pixel, and character styles (`ascii`, `ink`) look coarser at
-one: shoot those with `--dpr 2` before you judge them. For `ink`, also put a full-size crop beside the
-look you are aiming at (the reference, at the same zoom).
+one: shoot and film those with `--dpr 2` before you judge them or show them to anyone. For `ink`,
+also put a full-size crop beside the look you are aiming at (the reference, at the same zoom), and
+look at the whole frame small: if its light and dark do not read, the characters do not matter.
 
 `shot` writes four moments in each look (running, the pointer resting, a click, after) and a
 contact sheet. Look at the sheet first, then crop to full size where the detail is (a creature, the

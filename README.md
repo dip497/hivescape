@@ -47,21 +47,19 @@ flows, grass and leaves bend in the wind, rain falls, mist drifts, a halo breath
 contrast is what makes the moving parts read: a moving region flips its characters in place against
 still ones, as an ASCII shader over a still shot does.
 
-| Ejiri (Japan, about 1830) | Gèdres (a photograph, 1853) |
+| Ejiri (Japan, about 1830), at full size | Lakshmi (India, 1883), at full size |
 |---|---|
-| ![Hokusai's gale at Ejiri in ink: waves of light sweep through the rice field and the trees, the travellers and Fuji still](docs/images/film-ejiri.webp) | ![Joseph Vigier's photograph of Gèdres in ink: the river pours over the rapids under the still village and bridge](docs/images/film-gedres.webp) |
-| **Sudden Shower (Japan, 1857)** | **The Harvest (Flanders, 1565)** |
-| ![Hiroshige's bridge in ink: rain over the still bridge and walkers, the river running under it](docs/images/film-sudden-shower.webp) | ![Bruegel's Harvesters in ink: the standing wheat and the pear tree in the wind, the reapers resting still](docs/images/film-harvest.webp) |
+| ![Hokusai's gale at Ejiri in ink: the field's characters flicker in the wind round a traveller in an orange hat, who holds still](docs/images/film-ejiri.webp) | ![Lakshmi in ink: her gold crown in glowing characters over the dark picture, the halo breathing](docs/images/film-lakshmi.webp) |
 
-Each cell is a block of the picture's own colour with a character in a brighter shade over it.
-Where the picture is flat (a sky, paper) the cell keeps near its colour with a faint character, so
-the picture reads from across the room; where it has detail the ground darkens and the character
-brightens, so the characters draw the brushwork. Outlines become lines that join from cell to cell
-(`─ │ ╱ ╲`), and a seam under each row gives a screen's scan lines.
+Beneath the characters is the picture itself, dark. Each cell is read for its colour, its brightness
+and its texture: where the texture runs one way (grass, rain, the line of a roof) the cell takes a
+stroke along it, `- | \ /`; elsewhere a character as dense as the cell is bright, from ` .-:*+=%o#@` (ordered by how much of the cell each covers),
+and a dark cell none, so the picture shows through. The characters are the picture's colours,
+saturated, and glow; a seam under each row gives a screen's scan lines.
 
-| Lakshmi (India, 1883) | Mountain Mist (China, 1898) | Lakshmi by day | Up close |
-|---|---|---|---|
-| ![Lakshmi in ink: the goddess crowned, her halo glowing, in a red sari, the wheat and the tree behind her](docs/images/painting-lakshmi.webp) | ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) | ![Lakshmi in ink on a light look, like an engraving](docs/images/painting-lakshmi-light.webp) | ![Close-up of the crown and halo: cells of colour, characters, joined lines, scan lines](docs/images/painting-close.webp) |
+| The whole of Lakshmi | Mountain Mist (China, 1898) | Lakshmi by day |
+|---|---|---|
+| ![Lakshmi in ink: the goddess crowned, her red robe and gold, the wheat and the tree behind her](docs/images/painting-lakshmi.webp) | ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) | ![Lakshmi in ink on a light look, like a print](docs/images/painting-lakshmi-light.webp) |
 
 A picture is a scene in a few lines: what moves, and nothing else.
 
@@ -154,7 +152,7 @@ in `/ \ _ |` and the bees are characters too.
   | `ascii` | Character cells, as a terminal draws them: a body is a block with a character cut into it, an edge the light character that sits where the shape does (`. , ' ( )`), a thin stroke a line character along it (`- \| / \`). |
   | `pixel` | Square cells, flat or in relief. |
   | `native` | The picture itself at full resolution, lit and glowing: plain 2D illustration. |
-  | `ink` | The whole frame in characters, as an ASCII shader draws: each cell its colour, a character in a brighter shade over it, lines along edges. Made for paintings and photographs. |
+  | `ink` | The whole frame in characters, as an ASCII shader over a picture draws: the picture beneath, dark, and over it glowing characters in its colours, strokes along its texture (`/` in grass, `\|` in rain). Made for paintings and photographs. |
 
 - **Lit.** `light()` paints what glows. Each cell is shaded from the direction its light comes
   from, a cell inside strong light shines on its own, and the light glows over the ground.

@@ -66,12 +66,18 @@ touch, whether it rains or mist lies in it. Everything else will hold still.
 
 ## 4. Film it and read its motion map
 
-Stills cannot show motion. Film it, every frame at its own time:
+Stills cannot show motion. Film it, every frame at its own time, **at pixel ratio 2**: that is what a
+laptop shows, and at ratio 1 every character is a blurred 8 x 12 smudge that makes the style look
+worse than it is. Never judge it, or show it to anyone, from a small or recompressed preview.
 
 ```bash
-node packages/cli/bin/hivescape.mjs film scenes/<id> --seconds 8 --backend webgl2 --webp
-# out/films/<id>-dark.mp4, <id>-dark-motion.png, <id>-dark.webp
+node packages/cli/bin/hivescape.mjs film scenes/<id> --seconds 5 --fps 24 --dpr 2 --backend webgl2
+# out/films/<id>-dark.mp4 (2560 x 1600) and <id>-dark-motion.png
 ```
+
+Then look at frames **at full size**: whole frames scaled down to see that the picture reads (its
+light and dark, its main figure), and crops at 100% beside the same crop of the look you are aiming
+for, to see the characters. A frame you have not opened is not reviewed.
 
 The **motion map** is where the frame changes, on average: put it beside a frame and check:
 
@@ -82,7 +88,8 @@ The **motion map** is where the frame changes, on average: put it beside a frame
       `shimmer` or `speed`, not the area.
 - [ ] In the film: water runs the right way at a believable speed and stays in its banks; the wind
       bends things in place, nothing slides; nothing jerks; it is calm enough to work in front of.
-- [ ] The picture still reads from across the room: its main figure, its tones (`levels` if faded).
+- [ ] The picture still reads from across the room: bright parts bright (dense characters), dark
+      parts dark, its main figure clear; `levels` if faded.
 
 Then `hivescape-review` for both looks and the cost (`bench --kind ink`), and `hivescape-hivemind` to pack
 it (its credit goes into `CREDITS.txt`) and check it in Hivemind.

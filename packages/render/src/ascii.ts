@@ -11,8 +11,6 @@
  * - A thin stroke through a cell is a line character along it: `-`, `|`, `/`, `\`, and `_` low.
  */
 
-import { JOINED } from "./atlas.js";
-
 /** Edge characters, by index. */
 export const ASCII_EDGES = ".,_'\"-:|/\\()";
 export const EDGE = { dot: 0, comma: 1, under: 2, tick: 3, ticks: 4, dash: 5, colon: 6, bar: 7, slash: 8, back: 9, open: 10, close: 11 } as const;
@@ -49,37 +47,61 @@ export const bodyGlyph = (l: number, n: number, jitter = 0): number => Math.min(
 export const CUT = { dark: 0.3, light: 0.52 } as const;
 
 /**
- * The ink style's rules (the GPU's shader mirrors them). The brightness change across a cell of
- * `ss x ss` samples, `Lu` row by row: right half less left half, bottom half less top half.
+ * The ink style's rules (the GPU's shader mirrors them), as an ASCII shader over a picture draws: each
+ * cell is read for its texture (how strong, and how much it runs one way), and takes either a stroke
+ * along that texture (grass `/`, rain `|`, a roof line `-`) or a character as dense as it is bright.
  */
-export function inkGradient(Lu: ArrayLike<number>, ss: number): [number, number] {
-  let gx = 0, gy = 0;
-  const h = ss >> 1;
-  for (let k = 0; k < ss; k++) for (let m = 0; m < h; m++) {
-    gx += Lu[k * ss + h + m]! - Lu[k * ss + m]!;
-    gy += Lu[(h + m) * ss + k]! - Lu[m * ss + k]!;
+
+/** Ink's stroke characters, by `inkStroke`'s index: along the texture. */
+export const INK_STROKES = "-|\\/";
+
+/** A cell's texture from its `ss x ss` samples of brightness `Lu` (row by row), in a `cw x ch` cell. */
+export interface InkTexture {
+  /** How much texture, 0..1. */
+  tex: number;
+  /** How much it runs one way, 0 (no way) .. 1 (all one way). */
+  coh: number;
+  /** The direction brightness changes fastest in, radians, y down (the texture runs across it). */
+  angle: number;
+}
+
+/** How strongly texture registers: the brightness change per two pixels at which `tex` reaches 1, inverted. */
+export const INK_TEXTURE_GAIN = 6;
+
+/** A cell's texture: the structure tensor of its samples' brightness, the change measured per two pixels. */
+export function inkTexture(Lu: ArrayLike<number>, ss: number, cw: number, ch: number): InkTexture {
+  const kx = (2 * ss) / cw, ky = (2 * ss) / ch;
+  let jxx = 0, jyy = 0, jxy = 0, n = 0;
+  for (let v = 0; v < ss - 1; v++) for (let u = 0; u < ss - 1; u++) {
+    const a = Lu[v * ss + u]!, b = Lu[v * ss + u + 1]!, c = Lu[(v + 1) * ss + u]!, d = Lu[(v + 1) * ss + u + 1]!;
+    const dx = ((b - a + d - c) / 2) * kx, dy = ((c - a + d - b) / 2) * ky;
+    jxx += dx * dx; jyy += dy * dy; jxy += dx * dy; n++;
   }
-  return [gx / (ss * h), gy / (ss * h)];
+  jxx /= n; jyy /= n; jxy /= n;
+  const e = jxx + jyy;
+  return { tex: Math.min(1, Math.sqrt(e) * INK_TEXTURE_GAIN), coh: e > 1e-9 ? Math.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / e : 0, angle: 0.5 * Math.atan2(2 * jxy, jxx - jyy) };
 }
 
-/** The line along an edge whose brightness changes by `gx, gy` across a `cw x ch` cell: an index into `ASCII_EDGES`. */
-export function inkEdge(gx: number, gy: number, cw: number, ch: number): number {
-  const a = Math.atan2(gy / ch, gx / cw) + Math.PI / 2, m = ((a % Math.PI) + Math.PI) % Math.PI;
-  if (m < Math.PI / 8 || m > (7 * Math.PI) / 8) return EDGE.dash;
-  if (m > (3 * Math.PI) / 8 && m < (5 * Math.PI) / 8) return EDGE.bar;
-  return m < Math.PI / 2 ? EDGE.back : EDGE.slash;
+/** The stroke along a texture whose brightness changes fastest at `angle`: an index into `INK_STROKES`. */
+export function inkStroke(angle: number): number {
+  const a = (((angle + Math.PI / 2) % Math.PI) + Math.PI) % Math.PI;
+  if (a < Math.PI / 8 || a > (7 * Math.PI) / 8) return 0;
+  if (a > (3 * Math.PI) / 8 && a < (5 * Math.PI) / 8) return 1;
+  return a < Math.PI / 2 ? 2 : 3;
 }
 
-/** Ink's edge characters, by the same indices as `ASCII_EDGES`: its lines join their neighbours'. */
-export const INK_EDGES = `.,_'"${JOINED.across}:${JOINED.down}${JOINED.up}${JOINED.fall}()`;
+/** The thresholds: no character below `none` of tone; a stroke where texture is at least `tex` and runs one way at least `coh`. */
+export const INK_PICK = { none: 0.08, tex: 0.45, coh: 0.55 } as const;
 
-/** The spread of brightness across an ink cell's samples (their standard deviation, 0..0.5). */
-export function inkSpread(Lu: ArrayLike<number>, n: number): number {
-  let m = 0, q = 0;
-  for (let k = 0; k < n; k++) { m += Lu[k]!; q += Lu[k]! * Lu[k]!; }
-  m /= n;
-  return Math.sqrt(Math.max(0, q / n - m * m));
+/**
+ * Which character an ink cell takes, and how strongly it shows (0..1): `[0]` none, `[1, stroke, s]`
+ * along strong one-way texture, `[2, ramp index, s]` as dense as the cell is bright (texture adds a
+ * little), so the picture's light and dark read in the characters. `tone` is the cell's brightness on
+ * a dark look (its darkness on a light one), 0..1; the ramp runs from least to most ink.
+ */
+export function inkGlyph(tone: number, t: InkTexture, rampLen: number): [0] | [1 | 2, number, number] {
+  if (tone < INK_PICK.none) return [0];
+  if (t.tex > INK_PICK.tex && t.coh > INK_PICK.coh) return [1, inkStroke(t.angle), 0.55 + 0.45 * tone];
+  const q = Math.min(1, tone * (0.85 + 0.25 * t.tex)), k = Math.min(rampLen - 1, Math.floor(q * rampLen));
+  return k <= 0 ? [0] : [2, k, 0.4 + 0.6 * q];
 }
-
-/** Which of `n` ramp characters an ink cell of brightness `d` (0..1, against its ground) takes. */
-export const inkDensity = (d: number, n: number): number => Math.min(n - 1, Math.max(0, Math.floor(d * 1.12 * n)));

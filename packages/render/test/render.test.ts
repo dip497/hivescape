@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { averageCells, cellShapes } from "../src/kernel.ts";
-import { ASCII_EDGES, bodyGlyph, edgeGlyph, INK_EDGES, inkDensity, inkEdge, inkGradient, inkSpread } from "../src/ascii.ts";
-import { JOINED } from "../src/atlas.ts";
-import { cellSize, inkColours, inkDetail, inkStrength, inkTone } from "../src/frame.ts";
+import { ASCII_EDGES, bodyGlyph, edgeGlyph, INK_STROKES, inkGlyph, inkTexture } from "../src/ascii.ts";
+import { cellSize, inkColour } from "../src/frame.ts";
 import { gridFor } from "../src/surface.ts";
 import { resolveStyle, DARK } from "@hivescape/core";
 
@@ -75,39 +74,59 @@ describe("ascii", () => {
 
 describe("ink", () => {
   const lum = (r: number, g: number, b: number) => 0.299 * r + 0.587 * g + 0.114 * b;
-  test("a flat cell keeps near its own colour; detail darkens the ground and brightens the character", () => {
-    const [fr, fg, fb, ir, ig, ib] = inkColours(0.6, 0.5, 0.3, true, 0);
-    const [dr, dg, db, jr, jg, jb] = inkColours(0.6, 0.5, 0.3, true, 1);
-    // Flat: the ground stays within a fifth of the cell's brightness, so a sky still reads as sky.
-    expect(lum(fr, fg, fb)).toBeGreaterThan(lum(0.6, 0.5, 0.3) * 0.8);
-    expect(lum(dr, dg, db)).toBeLessThan(lum(fr, fg, fb) * 0.7);
-    // The character stands further off its ground where there is detail.
-    expect(lum(jr, jg, jb) / lum(dr, dg, db)).toBeGreaterThan(2 * (lum(ir, ig, ib) / lum(fr, fg, fb)));
+  /** A cell's 4 x 4 samples, row by row, from `f(x, y)` over the cell (0..1 each way). */
+  const cell = (f: (x: number, y: number) => number) => Array.from({ length: 16 }, (_, k) => f(((k % 4) + 0.5) / 4, (Math.floor(k / 4) + 0.5) / 4));
+  /** Stripes `period` of a cell apart, running at `deg` degrees (0 across, 90 down the screen). */
+  const stripes = (deg: number, period = 0.5) => cell((x, y) => {
+    const a = (deg * Math.PI) / 180, d = -x * Math.sin(a) * (8 / 12) + y * Math.cos(a);
+    return 0.5 + 0.4 * Math.sin((2 * Math.PI * d) / period);
   });
-  test("on a light look the ground is washed and the character deeper than the colour", () => {
-    const [gr, gg, gb, cr, cg, cb] = inkColours(0.6, 0.5, 0.3, false, 1);
-    expect(lum(gr, gg, gb)).toBeGreaterThan(lum(0.6, 0.5, 0.3));
-    expect(lum(cr, cg, cb)).toBeLessThan(lum(0.6, 0.5, 0.3) * 0.6);
+  const glyphOf = (tone: number, Lu: number[]) => { const g = inkGlyph(tone, inkTexture(Lu, 4, 8, 12), 9); return g[0] === 1 ? INK_STROKES[g[1]] : g[0] === 2 ? "ramp" : "none"; };
+
+  test("texture that runs one way is drawn as a stroke along it", () => {
+    expect(glyphOf(0.7, stripes(0))).toBe("-");
+    expect(glyphOf(0.7, stripes(90))).toBe("|");
+    // y runs down the screen: down to the right is a backslash, up to the right a slash.
+    expect(glyphOf(0.7, stripes(45))).toBe("\\");
+    expect(glyphOf(0.7, stripes(-45))).toBe("/");
   });
-  test("a cell's detail is the spread of its brightness: none in a flat cell, full in a sharp one", () => {
-    const flat = new Array(16).fill(0.7), checker = Array.from({ length: 16 }, (_, k) => ((k + (k >> 2)) & 1 ? 0.9 : 0.1));
-    expect(inkDetail(inkSpread(flat, 16))).toBeLessThan(1e-4);
-    expect(inkDetail(inkSpread(checker, 16))).toBe(1);
-    expect(inkStrength(1)).toBe(1);
-    expect(inkStrength(0)).toBeLessThan(0.5);
+  test("a character is as dense as its cell is bright, so the picture's light and dark read; a dark cell takes none", () => {
+    const flat = inkTexture(cell(() => 0.6), 4, 8, 12);
+    expect(flat.tex).toBeLessThan(0.01);
+    const at = (tone: number) => inkGlyph(tone, flat, 11);
+    // Brighter, denser: up the ramp (which runs from least ink to most) as the tone rises.
+    expect(at(0.95)[0]).toBe(2);
+    expect(at(0.95)[1]!).toBeGreaterThan(at(0.6)[1]!);
+    expect(at(0.6)[1]!).toBeGreaterThan(at(0.3)[1]!);
+    expect(at(0.95)[1]!).toBeGreaterThanOrEqual(8);
+    // Texture adds a little: the same brightness full of texture sits a step or so higher.
+    const busy = inkGlyph(0.6, { tex: 1, coh: 0, angle: 0 }, 11);
+    expect(busy[1]!).toBeGreaterThan(at(0.6)[1]!);
+    expect(busy[1]! - at(0.6)[1]!).toBeLessThanOrEqual(3);
+    expect(inkGlyph(0.05, inkTexture(stripes(0), 4, 8, 12), 11)[0]).toBe(0);
   });
-  test("a flat bright sky takes a lighter character than the same brightness full of detail", () => {
-    const n = 12;
-    expect(inkDensity(inkTone(0.8, true, 0), n)).toBeLessThan(inkDensity(inkTone(0.8, true, 1), n) - 2);
-    // On a light look the ramp runs the other way: dark cells are dense.
-    expect(inkDensity(inkTone(0.1, false, 1), n)).toBeGreaterThan(inkDensity(inkTone(0.9, false, 1), n));
+  test("texture that runs no one way (a speckle) takes a ramp character, not a stroke", () => {
+    // Blobs two samples across, bright and dark in turn both ways: texture, but running no one way.
+    const speckle = cell((x, y) => ((Math.floor(x * 2) + Math.floor(y * 2)) % 2 ? 0.9 : 0.2));
+    const t = inkTexture(speckle, 4, 8, 12);
+    expect(t.tex).toBeGreaterThan(0.5);
+    expect(glyphOf(0.6, speckle)).toBe("ramp");
   });
-  test("an edge is drawn as a joined line along it, so neighbouring cells make one line", () => {
-    // Samples 4 x 4, row by row: bright above, dark below, a level edge; then bright left, dark right.
-    const level = Array.from({ length: 16 }, (_, k) => (k < 8 ? 0.9 : 0.1));
-    const upright = Array.from({ length: 16 }, (_, k) => (k % 4 < 2 ? 0.9 : 0.1));
-    const [lx, ly] = inkGradient(level, 4), [ux, uy] = inkGradient(upright, 4);
-    expect(INK_EDGES[inkEdge(lx, ly, 7, 13)]).toBe(JOINED.across);
-    expect(INK_EDGES[inkEdge(ux, uy, 7, 13)]).toBe(JOINED.down);
+  test("a character shows more strongly the brighter its cell", () => {
+    const t = inkTexture(stripes(90), 4, 8, 12);
+    expect((inkGlyph(0.9, t, 9) as number[])[2]!).toBeGreaterThan((inkGlyph(0.4, t, 9) as number[])[2]!);
+  });
+  test("on a dark look a character is its cell's colour, more saturated and brighter the stronger it is", () => {
+    const [r, g, b] = inkColour(0.5, 0.4, 0.3, true, 1), [r0, g0, b0] = inkColour(0.5, 0.4, 0.3, true, 0.3);
+    expect(lum(r, g, b)).toBeGreaterThan(lum(r0, g0, b0));
+    expect(lum(r, g, b)).toBeGreaterThan(lum(0.5, 0.4, 0.3));
+    // Hue kept and pushed apart from grey: red stays above green above blue, and the colour's spread
+    // against its brightness grows (brightening alone would keep that ratio).
+    expect(r > g && g > b).toBe(true);
+    expect((r - b) / lum(r, g, b)).toBeGreaterThan(1.5 * ((0.5 - 0.3) / lum(0.5, 0.4, 0.3)));
+  });
+  test("on a light look a character is deeper than its cell's colour", () => {
+    const [r, g, b] = inkColour(0.6, 0.5, 0.3, false, 1);
+    expect(lum(r, g, b)).toBeLessThan(lum(0.6, 0.5, 0.3) * 0.6);
   });
 });

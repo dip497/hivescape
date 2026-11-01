@@ -81,17 +81,18 @@ its tuning for its own kind.
   A night scene's low ambient is lifted to at least 0.65 here, so characters still read.
 - **pixel**: square cells, with an optional bevel.
 - **native**: the picture itself at the screen's resolution, lit and glowing, with no cells.
-- **ink**: the whole frame in characters, as an ASCII shader draws it, made for paintings and
-  photographs. The backdrop is drawn into the picture, so every cell is covered. From each cell's
-  4 × 4 samples come its colour, its brightness, the change across it and the spread of brightness
-  inside it (its detail). `frame.ts` holds the rules both backends follow (`INK`, `inkColours`,
-  `inkTone`, `inkStrength`):
-  - a flat cell (a sky, a blurred surround) keeps near its own colour and takes a faint, light
-    character, so the picture keeps its tones and a sky is not a wall of `0`;
-  - a detailed cell takes a darker ground and a bright character, as dense as the cell is bright
-    (as dark, on a light look), so the characters draw the painting's detail;
-  - a sharp change across a cell is an edge, drawn as a line along it. The atlas draws ink's lines
-    itself, edge to edge of the cell (`─ │ ╱ ╲`), so neighbours join into one unbroken line;
+- **ink**: the whole frame in characters, as an ASCII shader over a picture draws it, made for
+  paintings and photographs. The backdrop is drawn into the picture. Beneath the characters is the
+  picture itself, darkened (washed toward the page, on a light look). Each cell is read from its
+  4 × 4 samples for its colour, its brightness and its texture (the structure tensor of its
+  brightness: how strong the texture is, and how much it runs one way). `ascii.ts` (`inkTexture`,
+  `inkGlyph`) and `frame.ts` (`INK`, `inkColour`) hold the rules both backends follow:
+  - texture that runs one way (grass, rain, a roof line) is a stroke along it: `- | \ /`;
+  - any other cell takes a character as dense as it is bright (as dark, on a light look), a little
+    denser where it has texture, from ` .-:*+=%o#@` (ordered by how much of the cell each covers), so
+    the picture's light and dark read in the characters; a dark cell takes none;
+  - a character is its cell's colour, saturated, and brightened the stronger it is; on a dark look
+    it glows (a blurred copy of the characters, added on); on a light one it is deepened instead;
   - a seam under each row gives the scan lines of a screen.
 
   `@hivescape/paintings` builds scenes for it from photographs and paintings, which move only where
@@ -148,9 +149,10 @@ crosses: they rise toward the light, catch more of it, and their shadows lengthe
   full-layer draws a frame, whatever the cell count, with no cast shadows. The layer is kept at one
   device pixel per CSS pixel.
 
-In ink, whose picture moves every frame, the 2D path writes the whole layer into one image: each
-cell's ground (with its seam), then the pixels its character covers, read once out of the atlas. One
-upload and one draw a frame, at one pixel per CSS pixel, whatever moves.
+In ink, the 2D path draws the picture beneath, then writes every cell's character (the pixels it
+covers, read once out of the atlas, in its colour) into one image laid over it, and its glow from a
+quarter-size copy of that image. The GPU draws the picture beneath in the full-screen pass and each
+character's glow from the atlas's own blurred mip levels.
 
 A native scene (its whole picture at full resolution) gains nothing from WebGL and would upload a
 full-resolution picture every frame there; when the backend is left to choose, `Engine` draws a

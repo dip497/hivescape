@@ -82,42 +82,27 @@ export function cellHash(i: number, j: number, tick: number): number {
 export const lightness = (r: number, g: number, b: number): number => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
 /**
- * How the ink style colours a cell, from its own colour (0..1) and its detail `d` (0 flat .. 1 full of
- * detail; `inkDetail`). A flat cell (a clear sky, a blurred surround) stays near its own colour, a
- * faint character of the same hue over it, so the picture keeps its tones; a detailed cell gets a
- * darker ground (washed, on a light look) and a bright (deep) character, so the characters draw the
- * painting's detail. Colours are pushed a little apart from grey (`sat`), as light through glass.
- * Both backends read these.
+ * How the ink style colours a frame, as an ASCII shader over a picture does: the picture itself beneath,
+ * darkened (washed toward the page, on a light look), and over it each cell's character in the cell's
+ * own colour, saturated and brightened by its strength (deepened, on a light look), glowing; a seam
+ * under each row as a screen's scan lines. Both backends read these.
  */
 export const INK = {
-  dark: { flat: 0.84, ground: 0.5, ink: 1.34, lift: 0.04, seam: 0.64 },
-  light: { flat: 0.08, ground: 0.3, ink: 0.5, lift: 0, seam: 0.9 },
-  sat: 1.18,
-  /** A character's strength in a flat cell; detail raises it to 1. */
-  faint: 0.4,
-  /** How fast detail (the spread of brightness inside the cell) reaches 1. */
-  detail: 9,
-  /** A flat cell takes a character this much lighter (a bright sky `=`, not a wall of `0`); detail takes it back. */
-  calm: 0.5,
+  /** The picture beneath: its share on a dark look; on a light one, how far it is washed toward the page. */
+  base: { dark: 0.38, light: 0.5 },
+  /** How far a character's colour is pushed from grey. */
+  sat: 2.0,
+  /** How much of the characters spills round them as glow (dark look). */
+  glow: 0.8,
+  /** The scan line under each row: what it leaves of the brightness. */
+  seam: { dark: 0.5, light: 0.86 },
 } as const;
 
-/** A cell's detail, 0..1, from the spread of brightness across its samples (`inkSpread`). */
-export const inkDetail = (spread: number): number => Math.min(1, spread * INK.detail);
-
-/** How strongly an ink cell's character shows, from its detail. */
-export const inkStrength = (d: number): number => INK.faint + (1 - INK.faint) * d;
-
-/** A cell's ground and character colours in ink, 0..1 in and out, from its colour and detail `d`. */
-export function inkColours(r: number, g: number, b: number, dark: boolean, d: number): [number, number, number, number, number, number] {
-  const l = 0.299 * r + 0.587 * g + 0.114 * b;
-  r = Math.min(1, Math.max(0, l + (r - l) * INK.sat)); g = Math.min(1, Math.max(0, l + (g - l) * INK.sat)); b = Math.min(1, Math.max(0, l + (b - l) * INK.sat));
-  if (dark) {
-    const { flat, ground, ink, lift } = INK.dark, k = flat + (ground - flat) * d, m = flat + 0.2 + (ink - flat - 0.2) * d;
-    return [r * k, g * k, b * k, Math.min(1, r * m + lift * d), Math.min(1, g * m + lift * d), Math.min(1, b * m + lift * d)];
-  }
-  const { flat, ground, ink } = INK.light, k = flat + (ground - flat) * d, m = 0.8 + (ink - 0.8) * d;
-  return [r + (1 - r) * k, g + (1 - g) * k, b + (1 - b) * k, r * m, g * m, b * m];
+/** A character's colour, 0..1 in and out, from its cell's colour and the character's strength `s` (0..1). */
+export function inkColour(r: number, g: number, b: number, dark: boolean, s: number): [number, number, number] {
+  const l = 0.299 * r + 0.587 * g + 0.114 * b, k = INK.sat;
+  r = Math.min(1, Math.max(0, l + (r - l) * k)); g = Math.min(1, Math.max(0, l + (g - l) * k)); b = Math.min(1, Math.max(0, l + (b - l) * k));
+  if (dark) { const m = 0.8 + s, a = 0.05 * s; return [Math.min(1, r * m + a), Math.min(1, g * m + a), Math.min(1, b * m + a)]; }
+  const m = 0.55 - 0.15 * s;
+  return [r * m, g * m, b * m];
 }
-
-/** How far up the ramp an ink cell's character sits, 0..1: its brightness (darkness, on a light look), calmed where it is flat. */
-export const inkTone = (lm: number, dark: boolean, d: number): number => (dark ? lm : 1 - lm) * (INK.calm + (1 - INK.calm) * d);

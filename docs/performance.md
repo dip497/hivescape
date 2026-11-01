@@ -47,12 +47,14 @@ Garden of the day, native, on Canvas2D: 4.4 ms at ratio 1 and 7.4 ms at 2 (on We
 34.4 ms, the full-resolution upload; so a native scene now takes the 2D canvas when the backend is
 left to choose). In ascii: 3.0 ms on WebGL and 11.7 ms on Canvas2D.
 
-The living pictures, in ink, 14 420 cells, The Harvest (its wheat and its pear tree in the wind):
-6.6 ms on WebGL at ratio 1 and 6.8 ms at 2; 12.9 ms and 11.8 ms on Canvas2D. The picture is composed
-once and drawn whole; only its moving regions are composed each frame, inside their own boxes. The
-wind's light is one image of one pixel a patch, drawn scaled up: drawn patch by patch (about 4 000
-draws) it took 28 ms on WebGL and 34 ms on Canvas2D. The 2D path writes the whole ink layer into
-one image a frame; stamping a character per cell with the canvas took 61.4 ms.
+The living pictures, in ink, 14 420 cells, at 1440 x 900: Ejiri (its whole field and sky in the
+wind) 10.0 ms on WebGL and 15.1 ms on Canvas2D; The Harvest 6.8 ms and 12.7 ms. The picture is
+composed once and drawn whole; only its moving regions are composed each frame, inside their own
+boxes. Ink reads each cell from 4 x 4 samples: at 8 x 8 the texture reads a little truer, but Ejiri
+then took 36.9 ms on WebGL and 48.1 ms on Canvas2D (the picture the scene paints each frame is four
+times the size), and the characters it picked were nearly the same. The 2D path writes every
+character into one image and its glow into a quarter-size copy: stamping a character per cell with
+the canvas took 61.4 ms.
 
 At 30 frames a second, a frame may take 33 ms. Below 20 ms of script, the scene stays under
 Hivemind's 60% limit.
