@@ -1,7 +1,0 @@
-{
-  "protocol": 1,
-  "name": "Koi Pond",
-  "entry": "dist/main.js",
-  "description": "Koi drift through a lily pond, gather under a resting pointer, and race for the food a click drops.",
-  "preview": "preview.webp"
-}

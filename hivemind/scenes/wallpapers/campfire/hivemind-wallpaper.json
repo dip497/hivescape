@@ -1,7 +1,0 @@
-{
-  "protocol": 1,
-  "name": "Campfire",
-  "entry": "dist/main.js",
-  "description": "A campfire in a clearing under the stars: flames lean to the pointer, and a click throws a log on.",
-  "preview": "preview.webp"
-}

@@ -1,0 +1,14 @@
+{
+  "apiVersion": 2,
+  "id": "@dip497/apiary",
+  "name": "Apiary",
+  "version": "0.1.0",
+  "wallpapers": [
+    {
+      "path": "wallpapers/apiary"
+    }
+  ],
+  "startup": {
+    "wallpaper": "@dip497/apiary/apiary"
+  }
+}

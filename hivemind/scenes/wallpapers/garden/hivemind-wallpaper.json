@@ -1,7 +1,0 @@
-{
-  "protocol": 1,
-  "name": "Garden of the day",
-  "entry": "dist/main.js",
-  "description": "Every turn an agent finishes grows a flower in its plot; its bird perches on its tile and sings when it needs you.",
-  "preview": "preview.webp"
-}

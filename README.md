@@ -23,12 +23,14 @@ A click sends a swell through the cells and lifts them as it passes.
 | ![Campfire at night, the firs lit by the fire on the side facing it](docs/images/campfire-dark.webp) | ![Campfire at dusk](docs/images/campfire-light.webp) |
 | ![Koi Pond by day](docs/images/koi-light.webp) | ![Close-up: stones and flames as glossy hexagonal cells, lit by the fire](docs/images/campfire-close.webp) |
 
-And a scene that wants plain illustration has it: Apiary is isometric 2.5D in the `native` style,
-its terraces, cottage and hives drawn at full resolution and lit the same way.
+And a scene that wants its own pixels has them: Apiary is an island built of blocks, isometric in
+the `native` style, every block face a 4 x 4 grid of flat pixels in its material's shades (grass
+over dirt, sand, logs and leaves, planks, a tiled roof, hive boxes), drawn at full resolution and lit
+the same way.
 
 | Apiary by day | Apiary by night |
 |---|---|
-| ![Apiary: an isometric island with terraces, a cottage, hives and flower patches](docs/images/apiary-light.webp) | ![Apiary at night: the cottage window and the lamp light the island](docs/images/apiary-dark.webp) |
+| ![Apiary: an island of blocks, grass over dirt and a sand beach, trees of logs and leaves, a plank cottage under a tiled roof, hive boxes and block flowers, in a pixelled sea](docs/images/apiary-light.webp) | ![Apiary at night: the cottage windows and the lantern glow and light the blocks round them](docs/images/apiary-dark.webp) |
 
 Every scene can also be drawn in **ascii**, the way a terminal draws: each cell is read as a
 shape, so a fish's flank gets `(` and `)`, its belly `,` and `_`, a reed `|`, and its body is
@@ -223,8 +225,10 @@ The full contract is in [`packages/core/src/scene.ts`](packages/core/src/scene.t
 | Folder | Package | Wallpapers |
 |---|---|---|
 | `hivemind/aurora` | `@dip497/aurora` | Aurora |
-| `hivemind/living-pictures` | `@dip497/living-pictures` | Ejiri, Lakshmi, The Harvest, Gèdres, Sudden Shower, Mountain Mist |
-| `hivemind/scenes` | `@dip497/hivescape-scenes` | The Hive, Koi Pond, Campfire, Apiary, Garden of the day |
+| `hivemind/apiary` | `@dip497/apiary` | Apiary |
+
+Only these two are packed: a scene is packed when it is good enough to be someone's background,
+not because it exists.
 
 Every scene can be a [Hivemind](https://github.com/dip497/hivemind) live wallpaper:
 
