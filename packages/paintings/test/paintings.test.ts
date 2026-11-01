@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { simulate } from "@hivescape/core";
-import { blurAt, depthAt, flowPhases, FLOW_CYCLE, levelsFilter, place, shimmerAt, swayAt } from "../src/index.ts";
+import { bendAt, blurAt, depthAt, driftAt, flowPhases, FLOW_CYCLE, grainOf, inside, levelsFilter, place, seedStrokes, shimmerAt, swayAt, type Outline, type Stroke } from "../src/index.ts";
 import suddenShower from "../../../scenes/sudden-shower/src/index.ts";
 
 type State = ReturnType<typeof suddenShower.create>;
@@ -148,5 +148,71 @@ describe("levels", () => {
   test("at no strength the picture is left as it is", () => {
     const f = levelsFilter(0.2, 0.8, 0);
     for (const v of [0, 0.3, 0.9]) expect(apply(f, v)).toBeCloseTo(v, 3);
+  });
+});
+
+describe("strokes", () => {
+  /** A picture `n x n` of stripes whose brightness changes across `deg` degrees from upright (0 vertical stripes, 45 leaning right). */
+  const stripes = (deg: number, n = 48) => {
+    const a = (deg * Math.PI) / 180, lum = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) lum[y * n + x] = 0.5 + 0.5 * Math.sin((x * Math.cos(a) + y * Math.sin(a)) * 0.9);
+    return grainOf(lum, n, n);
+  };
+  const mid = (g: ReturnType<typeof grainOf>) => [g.angle[24 * g.w + 24]!, g.sure[24 * g.w + 24]!] as const;
+
+  test("the grain runs along a picture's strokes: upright stripes stand up, stripes leaning right lean right", () => {
+    const [up, sureUp] = mid(stripes(0)), [right] = mid(stripes(45)), [left] = mid(stripes(-45));
+    expect(Math.abs(up)).toBeLessThan(0.05);
+    expect(sureUp).toBeGreaterThan(0.9);
+    expect(right).toBeCloseTo(Math.PI / 4, 1);
+    expect(left).toBeCloseTo(-Math.PI / 4, 1);
+  });
+  test("a flat picture has no grain to be sure of", () => {
+    expect(grainOf(new Float32Array(32 * 32).fill(0.4), 32, 32).sure.every((v) => v === 0)).toBe(true);
+  });
+
+  const field: Outline = [[0.1, 0.2], [0.9, 0.2], [0.9, 0.9], [0.1, 0.9]];
+  const figure: Outline = [[0.4, 0.4], [0.6, 0.4], [0.6, 0.8], [0.4, 0.8]];
+  const seed = (o: Partial<Parameters<typeof seedStrokes>[4]> = {}, except: Outline[] = [figure]) =>
+    seedStrokes(field, except, 800, 500, { spacing: 8, length: 15, follow: 0.7, lean: 0.9, grain: null, keep: () => true, ...o });
+
+  test("strokes grow through their region, never inside what stands in it, and only where the picture says", () => {
+    const all = seed();
+    expect(all.length).toBeGreaterThan(2500);
+    for (const s of all) { expect(inside(field, s.x, s.y)).toBe(true); expect(inside(figure, s.x, s.y)).toBe(false); }
+    // keep: only the left half grows.
+    const half = seed({ keep: (x) => x < 0.5 });
+    expect(half.length).toBeGreaterThan(0);
+    expect(half.every((s) => s.x < 0.5)).toBe(true);
+  });
+  test("strokes are the same each time for the same picture size, so a still frame is the same", () => {
+    expect(seed()).toEqual(seed());
+  });
+  test("a stroke follows the grain where it is sure, and never leans further than allowed", () => {
+    const g = stripes(45);
+    const along = seed({ grain: g, follow: 1, lean: 1.4 }, []), lean = seed({ grain: g, follow: 1, lean: 0.3 }, []);
+    const mean = along.reduce((a, s) => a + s.angle, 0) / along.length;
+    expect(mean).toBeGreaterThan(0.6);
+    expect(lean.every((s) => Math.abs(s.angle) <= 0.3 + 1e-9)).toBe(true);
+  });
+
+  const blade: Stroke = { x: 0.3, y: 0.5, angle: 0, len: 15, seed: 0.37 };
+  test("a blade bends away from the wind, never against it, and never more than its bend", () => {
+    for (let t = 0; t < 60; t += 0.13) {
+      const right = bendAt(t, blade, 0.4, 1), left = bendAt(t, blade, 0.4, -1);
+      expect(right).toBeGreaterThanOrEqual(0); expect(right).toBeLessThanOrEqual(0.4);
+      expect(left).toBeLessThanOrEqual(0); expect(left).toBeGreaterThanOrEqual(-0.4);
+    }
+  });
+  test("a gust travels across the field: it reaches a blade further downwind later", () => {
+    // The time of the strongest bend, for a blade upwind and one downwind.
+    const peak = (x: number) => { let best = 0, at = 0; for (let t = 0; t < 9; t += 0.01) { const b = bendAt(t, { ...blade, x }, 0.4, 1); if (b > best) { best = b; at = t; } } return at; };
+    expect(peak(0.4)).toBeGreaterThan(peak(0.3));
+  });
+  test("a ray drifts steadily along its curtain and comes round again, never leaving it", () => {
+    const ray: Stroke = { x: 0.5, y: 0.3, angle: 0, len: 40, seed: 0.1 };
+    expect(driftAt(1, ray, 0.02, 0, 1)).toBeCloseTo(0.52, 6);
+    expect(driftAt(-1, ray, 0.02, 0, 1)).toBeCloseTo(0.48, 6);
+    for (let t = 0; t < 500; t += 7) { const x = driftAt(t, ray, 0.013, 0.2, 0.8); expect(x).toBeGreaterThanOrEqual(0.2); expect(x).toBeLessThan(0.8); }
   });
 });

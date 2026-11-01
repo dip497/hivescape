@@ -68,6 +68,7 @@ export class Canvas2DBackend implements Backend {
   private lights = new Float32Array(0);
   private shapesOut = new Float32Array(0);
   private tints = new Tints();
+  private strokePaths = new Map<number, Path2D>();
   /** One pixel a cell (two a cell across for a comb, so odd rows can sit half a cell over). */
   private tiny: AnyCanvas = offscreen(1, 1);
   private tinyImg: ImageData | null = null;
@@ -385,6 +386,7 @@ export class Canvas2DBackend implements Backend {
   private drawOverlay(f: FrameInput, atlas: Atlas): void {
     const g = this.g, ov = f.overlay, { cw, ch } = f.grid;
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    if (ov.sn) this.drawStrokes(f);
     for (let n = 0; n < ov.n; n++) {
       const slot = ov.slot[n]!, s = ov.scale[n]!, a = ov.rgba[n * 4 + 3]!;
       const r = (ov.rgba[n * 4]! * 255) | 0, gg = (ov.rgba[n * 4 + 1]! * 255) | 0, b = (ov.rgba[n * 4 + 2]! * 255) | 0;
@@ -403,6 +405,30 @@ export class Canvas2DBackend implements Backend {
       g.drawImage(this.tints.get(atlas, slot, r, gg, b) as CanvasImageSource, ov.x[n]! - w / 2, ov.y[n]! - h / 2, w, h);
     }
     g.globalAlpha = 1;
+  }
+
+  /**
+   * The overlay's strokes: one path per colour (rounded to 5 bits a channel), strength (eighths) and
+   * width (quarter pixels), each stroked once, so a field of thousands of blades is a few hundred draws.
+   */
+  private drawStrokes(f: FrameInput): void {
+    const g = this.g, ov = f.overlay, paths = this.strokePaths;
+    paths.clear();
+    for (let i = 0; i < ov.sn; i++) {
+      const r = (ov.srgba[i * 4]! * 31 + 0.5) | 0, gg = (ov.srgba[i * 4 + 1]! * 31 + 0.5) | 0, b = (ov.srgba[i * 4 + 2]! * 31 + 0.5) | 0;
+      const a = Math.max(1, (ov.srgba[i * 4 + 3]! * 8 + 0.5) | 0), w = Math.max(1, (ov.swidth[i]! * 4 + 0.5) | 0);
+      const key = ((((r << 5) | gg) << 5 | b) << 4 | a) * 64 + w;
+      let p = paths.get(key);
+      if (!p) paths.set(key, (p = new Path2D()));
+      p.moveTo(ov.seg[i * 4]!, ov.seg[i * 4 + 1]!); p.lineTo(ov.seg[i * 4 + 2]!, ov.seg[i * 4 + 3]!);
+    }
+    g.lineCap = "round";
+    for (const [key, p] of paths) {
+      const w = key % 64, k = Math.floor(key / 64), a = k & 15, b = (k >> 4) & 31, gg = (k >> 9) & 31, r = (k >> 14) & 31;
+      g.strokeStyle = `rgba(${(r * 255) / 31 | 0},${(gg * 255) / 31 | 0},${(b * 255) / 31 | 0},${a / 8})`;
+      g.lineWidth = w / 4;
+      g.stroke(p);
+    }
   }
 
   destroy(): void {}

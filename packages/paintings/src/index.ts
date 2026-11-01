@@ -51,6 +51,24 @@ export type Effect =
    * `except`: outlines inside the region that hold still (a figure standing in the field).
    */
   | { kind: "wind"; region: Region | Outline; amp?: number; speed?: number; shimmer?: number; except?: readonly Outline[] }
+  /**
+   * Strokes: a region drawn as free strokes of light, off the cell grid, as an artist arranges marks
+   * into a texture (a field of blades, the rays of an aurora), each laid along the picture's own grain
+   * and coloured from the picture under it; the cells beneath give way to them (`under`, 0..1, how
+   * much). They move as the real thing does:
+   * - `bend` (grass, wheat, reeds): each blade is rooted and bends in place, away from the wind
+   *   (`wind`: 1 blowing right, -1 left), in gusts that travel across the field, `amp` radians at most;
+   * - `drift` (an aurora's rays): each ray drifts along the curtain (`speed` CSS pixels a second, along
+   *   `wind`) and its foot sways a little as the curtain folds.
+   * `on` says where strokes grow, from the picture's colour (default: wherever it is not dark);
+   * `spacing` and `length` are in CSS pixels; `follow` (0..1) how much a stroke follows the grain
+   * rather than standing up; `lean` the most it leans from upright, radians.
+   */
+  | {
+      kind: "strokes"; region: Region | Outline; except?: readonly Outline[]; motion: "bend" | "drift";
+      on?: (r: number, g: number, b: number) => boolean; spacing?: number; length?: number; width?: number;
+      follow?: number; lean?: number; wind?: number; amp?: number; speed?: number; under?: number;
+    }
   /** Rain: streaks at `angle` (radians from straight down, positive leaning right). */
   | { kind: "rain"; count: number; angle: number; colour: string; alpha?: number; length?: number; speed?: number; region?: Region }
   /** Mist: soft bands drifting across, at heights given in the picture's fractions. */
@@ -164,6 +182,82 @@ export function shimmerAt(t: number, i: number, j: number, x: number, shimmer: n
   return shimmer * (0.6 * band + 0.4 * Math.sin(t * 5 * speed + ph));
 }
 
+/**
+ * The picture's grain: at each point, the way its brushwork or texture runs (radians from straight up,
+ * positive leaning right, -pi/2..pi/2) and how surely (0 none .. 1 all one way), from the structure
+ * tensor of its brightness `lum` (`w x h`, row by row), smoothed over `radius` points each way.
+ */
+export interface Grain { w: number; h: number; angle: Float32Array; sure: Float32Array }
+export function grainOf(lum: ArrayLike<number>, w: number, h: number, radius = 3): Grain {
+  const at = (x: number, y: number) => lum[Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))]!;
+  const xx = new Float32Array(w * h), yy = new Float32Array(w * h), xy = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const gx = at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1) - at(x - 1, y - 1) - 2 * at(x - 1, y) - at(x - 1, y + 1);
+    const gy = at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1) - at(x - 1, y - 1) - 2 * at(x, y - 1) - at(x + 1, y - 1);
+    xx[y * w + x] = gx * gx; yy[y * w + x] = gy * gy; xy[y * w + x] = gx * gy;
+  }
+  const box = (a: Float32Array) => {
+    const t = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let v = 0; for (let k = -radius; k <= radius; k++) v += a[y * w + Math.min(w - 1, Math.max(0, x + k))]!; t[y * w + x] = v; }
+    for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) { let v = 0; for (let k = -radius; k <= radius; k++) v += t[Math.min(h - 1, Math.max(0, y + k)) * w + x]!; a[y * w + x] = v; }
+  };
+  box(xx); box(yy); box(xy);
+  const angle = new Float32Array(w * h), sure = new Float32Array(w * h);
+  for (let q = 0; q < w * h; q++) {
+    const a = xx[q]!, b = yy[q]!, c = xy[q]!, e = a + b;
+    // The brightness changes fastest across the grain: the grain runs a quarter turn from there.
+    const across = 0.5 * Math.atan2(2 * c, a - b), gx = -Math.sin(across), gy = Math.cos(across);
+    // As a direction from straight up (y down on the screen), the end that points up.
+    const ux = gy > 0 ? -gx : gx, uy = gy > 0 ? -gy : gy;
+    angle[q] = Math.atan2(ux, -uy);
+    sure[q] = e > 1e-9 ? Math.sqrt((a - b) * (a - b) + 4 * c * c) / e : 0;
+  }
+  return { w, h, angle, sure };
+}
+
+/** The grain at `x, y` of the picture (0..1 each way): its angle from upright and how sure it is. */
+export function grainAt(g: Grain, x: number, y: number): [number, number] {
+  const q = Math.min(g.h - 1, Math.max(0, Math.floor(y * g.h))) * g.w + Math.min(g.w - 1, Math.max(0, Math.floor(x * g.w)));
+  return [g.angle[q]!, g.sure[q]!];
+}
+
+/** A stroke: where its foot is (the picture's fractions), the way it stands (radians from upright, positive leaning right), its length (CSS pixels) and a number 0..1 of its own. */
+export interface Stroke { x: number; y: number; angle: number; len: number; seed: number }
+
+/**
+ * Strokes through `region` (less `except`), `spacing` CSS pixels apart on a picture drawn `w x h`,
+ * each nudged off the grid by a fixed amount of its own; where `keep(x, y)` says they grow, laid
+ * along the grain (`follow` of it, sure as the grain is) but never more than `lean` from upright.
+ */
+export function seedStrokes(region: Outline, except: readonly Outline[], w: number, h: number, o: { spacing: number; length: number; follow: number; lean: number; grain: Grain | null; keep: (x: number, y: number) => boolean }): Stroke[] {
+  const xs = region.map((p) => p[0]), ys = region.map((p) => p[1]), out: Stroke[] = [];
+  const x0 = Math.min(...xs) * w, x1 = Math.max(...xs) * w, y0 = Math.min(...ys) * h, y1 = Math.max(...ys) * h;
+  for (let j = 0, y = y0; y < y1; j++, y += o.spacing) for (let i = 0, x = x0; x < x1; i++, x += o.spacing) {
+    const sx = (x + (patchHash(i, j) - 0.5) * o.spacing) / w, sy = (y + (patchHash(j + 7919, i) - 0.5) * o.spacing) / h, seed = patchHash(i + 104729, j + 1299709);
+    if (!inside(region, sx, sy) || except.some((e) => inside(e, sx, sy)) || !o.keep(sx, sy)) continue;
+    const [ga, sure] = o.grain ? grainAt(o.grain, sx, sy) : [0, 0];
+    const angle = clamp(ga * o.follow * sure + (seed - 0.5) * 0.25, -o.lean, o.lean);
+    out.push({ x: sx, y: sy, angle, len: o.length * (0.65 + 0.7 * seed), seed });
+  }
+  return out;
+}
+
+/**
+ * How far a blade bends at time `t` (radians, added to its angle): away from the wind, in gusts that
+ * travel across the field (`x`, its place across the picture, sets when a gust reaches it), with a
+ * flutter of its own. Never more than `amp` and never against the wind: it bends in place.
+ */
+export function bendAt(t: number, s: Stroke, amp: number, wind: number, speed = 1): number {
+  const gust = 0.5 + 0.5 * Math.sin(t * 0.7 * speed - s.x * 6), flutter = 0.82 + 0.18 * Math.sin(t * 3.1 * speed + s.seed * TAU);
+  return Math.sign(wind || 1) * amp * gust * flutter;
+}
+
+/** Where a drifting ray's foot is at time `t`, across the picture (0..1): drifting at `speed` (picture widths a second) along its curtain, `x0..x1`, and round again. */
+export function driftAt(t: number, s: Stroke, speed: number, x0: number, x1: number): number {
+  const span = Math.max(1e-6, x1 - x0);
+  return x0 + ((((s.x - x0 + t * speed) % span) + span) % span);
+}
+
 /** A wind patch's size on the screen, CSS pixels: about a character and a half, so a patch flips a few at a time. */
 const PATCH = 10;
 /** The picture's width at most, in its own pixels: ink samples a 1440 px screen at about 820 points across. */
@@ -187,13 +281,27 @@ interface Built {
   scratch: Canvas | null;
   /** Each wind's light: one pixel a patch, written each frame and drawn scaled up in one go. */
   lights: (Canvas | null)[];
+  /** The picture's pixels (RGBA, `pw x ph`), read once: strokes take their colour from it. */
+  px: Uint8ClampedArray | null;
+  pw: number;
+  ph: number;
+  /** The picture's grain, when any effect draws strokes along it. */
+  grain: Grain | null;
+  /** Each strokes region's mask in the ground's colour, for a dark look and a light one: the cells beneath give way. */
+  gives: ({ dark: Canvas; light: Canvas } | null)[];
 }
 
 interface State {
   built: Built | null;
   t: number;
   drops: Drop[][];
+  /** Each strokes effect's strokes, seeded for the size the picture was last drawn at. */
+  strokes: (Stroke[] | null)[];
+  strokesFor: string;
 }
+
+/** The ground behind a living picture, on a dark look and a light one (its backdrop). */
+const GROUND = { dark: "#050505", light: "#f4f1ea" } as const;
 
 function decode(b64: string, mime: string): Promise<ImageBitmap> | null {
   if (typeof createImageBitmap !== "function" || typeof atob !== "function" || typeof OffscreenCanvas === "undefined") return null;
@@ -243,7 +351,12 @@ function build(img: ImageBitmap, m: Masterwork): Built {
     cg.drawImage(mc, 0, 0, w, h);
     g.drawImage(c, 0, 0);
   }
-  const moving = (e: Effect): e is Extract<Effect, { kind: "flow" | "wind" }> => e.kind === "flow" || e.kind === "wind";
+  const moving = (e: Effect): e is Extract<Effect, { kind: "flow" | "wind" | "strokes" }> => e.kind === "flow" || e.kind === "wind" || e.kind === "strokes";
+  const strokes = m.effects.some((e) => e.kind === "strokes");
+  const px = strokes ? g.getImageData(0, 0, w, h).data : null;
+  // At mask size: the picture's colours (where strokes grow) and its brightness (its grain).
+  const small = strokes ? (() => { const c = new OffscreenCanvas(mw, mh), sg = c.getContext("2d", { willReadFrequently: true }) as Ctx; sg.drawImage(pic, 0, 0, mw, mh); return sg.getImageData(0, 0, mw, mh).data; })() : null;
+  const grain = small ? grainOf(Float32Array.from({ length: mw * mh }, (_, q) => (0.299 * small[q * 4]! + 0.587 * small[q * 4 + 1]! + 0.114 * small[q * 4 + 2]!) / 255), mw, mh) : null;
   const masks = m.effects.map((e) => {
     if (!moving(e)) return null;
     const c = new OffscreenCanvas(mw, mh), mg = ctxOf(c);
@@ -254,6 +367,15 @@ function build(img: ImageBitmap, m: Masterwork): Built {
     // What holds still inside it is cut out, with the same soft edge.
     mg.globalCompositeOperation = "destination-out";
     for (const o of e.except ?? []) fill(o);
+    if (e.kind === "strokes" && small) {
+      // Strokes grow only where the picture says (a field's green, not its paths): the rest of the region keeps its cells.
+      const on = new OffscreenCanvas(mw, mh), og = ctxOf(on), id = og.createImageData(mw, mh);
+      for (let q = 0; q < mw * mh; q++) id.data[q * 4 + 3] = grows(e, small[q * 4]!, small[q * 4 + 1]!, small[q * 4 + 2]!) ? 255 : 0;
+      og.putImageData(id, 0, 0);
+      mg.filter = "blur(1px)";
+      mg.globalCompositeOperation = "destination-in";
+      mg.drawImage(on, 0, 0);
+    }
     return c;
   });
   const boxes = m.effects.map((e): Region | null => {
@@ -261,10 +383,39 @@ function build(img: ImageBitmap, m: Masterwork): Built {
     const o = outlineOf(e.region), xs = o.map((p) => p[0]), ys = o.map((p) => p[1]), pad = 0.02;
     return [Math.max(0, Math.min(...xs) - pad), Math.max(0, Math.min(...ys) - pad), Math.min(1, Math.max(...xs) + pad), Math.min(1, Math.max(...ys) + pad)];
   });
-  return { pic, masks, boxes, scratch: null, lights: m.effects.map(() => null) };
+  return { pic, masks, boxes, scratch: null, lights: m.effects.map(() => null), px, pw: w, ph: h, grain, gives: m.effects.map(() => null) };
+}
+
+/** Whether a strokes effect grows where the picture is this colour (0..255). */
+const grows = (e: Extract<Effect, { kind: "strokes" }>, r: number, g: number, b: number): boolean =>
+  e.on ? e.on(r, g, b) : 0.299 * r + 0.587 * g + 0.114 * b > 20;
+
+/** The picture's colour at `x, y` (0..1 each way), into `out`. */
+function colourAt(b: Built, x: number, y: number, out: number[]): void {
+  const q = (Math.min(b.ph - 1, Math.max(0, Math.floor(y * b.ph))) * b.pw + Math.min(b.pw - 1, Math.max(0, Math.floor(x * b.pw)))) * 4;
+  out[0] = b.px![q]!; out[1] = b.px![q + 1]!; out[2] = b.px![q + 2]!;
+}
+
+/** A strokes region's mask, filled with the ground's colour: laid over the picture, it lets the cells there give way. */
+function givesOf(b: Built, k: number): { dark: Canvas; light: Canvas } {
+  const have = b.gives[k];
+  if (have) return have;
+  const tint = (colour: string) => {
+    const mask = b.masks[k]!, c = new OffscreenCanvas(mask.width, mask.height), g = ctxOf(c);
+    g.drawImage(mask, 0, 0);
+    g.globalCompositeOperation = "source-in";
+    g.fillStyle = colour;
+    g.fillRect(0, 0, c.width, c.height);
+    return c;
+  };
+  return (b.gives[k] = { dark: tint(GROUND.dark), light: tint(GROUND.light) });
 }
 
 type Rect = { x: number; y: number; w: number; h: number };
+/** A colour reused for every stroke (the overlay reads it at once). */
+const RGB = [0, 0, 0];
+/** The share of a ray's length drawn at full strength; the rest, fainter, is its fading end. */
+const RAY_BODY = 0.55;
 
 /**
  * A moving region: drawn by `paint` into a scratch canvas the size of its box (in the picture
@@ -306,7 +457,7 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
     style: (look) => ({ kind: "ink", cell: [7, 13], ambient: 1, glow: 0.4, edge: 0.12, ...m.style?.(look) }),
 
     create(w) {
-      const s: State = { built: null, t: 0, drops: [] };
+      const s: State = { built: null, t: 0, drops: [], strokes: [], strokesFor: "" };
       seedFx(w.size.w, w.size.h, w.rng, s);
       decode(m.image, m.mime ?? "image/jpeg")?.then((img) => { s.built = build(img, m); }).catch(() => {});
       return s;
@@ -329,7 +480,7 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
       });
     },
 
-    backdrop(_s, g, w) { g.fillStyle = w.look.dark ? "#050505" : "#f4f1ea"; g.fillRect(0, 0, w.size.w, w.size.h); },
+    backdrop(_s, g, w) { g.fillStyle = w.look.dark ? GROUND.dark : GROUND.light; g.fillRect(0, 0, w.size.w, w.size.h); },
 
     picture(s, g, w) {
       const b = s.built;
@@ -368,6 +519,13 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
             c.imageSmoothingEnabled = true;
             c.drawImage(L!, r.x - ox + i0 * PATCH, r.y - oy + j0 * PATCH, cols * PATCH, rows * PATCH);
           });
+        } else if (e.kind === "strokes") {
+          // The cells beneath the strokes give way to them: the region, where strokes grow, toward the ground.
+          const gv = givesOf(b, k);
+          g.globalAlpha = e.under ?? (e.motion === "bend" ? 0.85 : 0.5);
+          g.imageSmoothingEnabled = true;
+          g.drawImage(w.look.dark ? gv.dark : gv.light, r.x, r.y, r.w, r.h);
+          g.globalAlpha = 1;
         } else if (e.kind === "rain") {
           g.strokeStyle = e.colour; g.globalAlpha = e.alpha ?? 0.55; g.lineWidth = 1.2;
           const sx = Math.sin(e.angle), cy = Math.cos(e.angle);
@@ -382,6 +540,46 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
             gr.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},${e.alpha ?? 0.35})`); gr.addColorStop(1, `rgba(${c[0]},${c[1]},${c[2]},0)`);
             g.save(); g.translate(x, y); g.scale(1, 0.18); g.translate(-x, -y);
             g.fillStyle = gr; g.fillRect(x - W * 0.4, y - W * 0.4, W * 0.8, W * 0.8); g.restore();
+          }
+        }
+      });
+    },
+
+    overlay(s, o, w) {
+      const b = s.built;
+      if (!b?.px) return;
+      const r = rectOf(s, w.size.w, w.size.h), size = `${r.w}x${r.h}`;
+      if (s.strokesFor !== size) {
+        s.strokes = m.effects.map((e) => e.kind !== "strokes" ? null : seedStrokes(outlineOf(e.region), e.except ?? [], r.w, r.h, {
+          spacing: e.spacing ?? 7, length: e.length ?? 16, follow: e.follow ?? 0.6, lean: e.lean ?? 0.9, grain: b.grain,
+          keep: (x, y) => { colourAt(b, x, y, RGB); return grows(e, RGB[0]!, RGB[1]!, RGB[2]!); },
+        }));
+        s.strokesFor = size;
+      }
+      m.effects.forEach((e, k) => {
+        if (e.kind !== "strokes") return;
+        const width = e.width ?? 1.4, wind = e.wind ?? 1, amp = e.amp ?? 0.35, sp = e.speed ?? 1, region = outlineOf(e.region);
+        const xs = region.map((p) => p[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
+        for (const st of s.strokes[k] ?? []) {
+          let fx = st.x, a = st.angle, alpha = 1;
+          if (e.motion === "bend") a += bendAt(s.t, st, amp, wind, sp);
+          else {
+            // A ray drifts along its curtain, fading in and out at the curtain's ends so it never pops.
+            fx = driftAt(s.t, st, (sp * Math.sign(wind || 1)) / r.w, x0, x1);
+            if (!inside(region, fx, st.y)) continue;
+            alpha = Math.min(1, (fx - x0) / 0.04, (x1 - fx) / 0.04);
+            a += 0.06 * Math.sin(s.t * 0.5 * sp + st.seed * TAU);
+          }
+          const dx = Math.sin(a) * st.len, dy = -Math.cos(a) * st.len, X = r.x + fx * r.w, Y = r.y + st.y * r.h;
+          colourAt(b, fx + dx / 2 / r.w, st.y + dy / 2 / r.h, RGB);
+          // Each stroke a shade of its own, as a painter's strokes are never all one green.
+          const k2 = 0.86 + 0.28 * ((st.seed * 7.31) % 1);
+          RGB[0] = Math.min(255, RGB[0]! * k2); RGB[1] = Math.min(255, RGB[1]! * k2); RGB[2] = Math.min(255, RGB[2]! * k2);
+          if (e.motion === "bend") o.stroke(X, Y, X + dx, Y + dy, RGB as unknown as Rgb, alpha, width);
+          else {
+            // A ray of light fades toward its end: its upper part is drawn fainter.
+            o.stroke(X, Y, X + dx * RAY_BODY, Y + dy * RAY_BODY, RGB as unknown as Rgb, alpha, width);
+            o.stroke(X + dx * RAY_BODY, Y + dy * RAY_BODY, X + dx, Y + dy, RGB as unknown as Rgb, alpha * 0.4, width);
           }
         }
       });

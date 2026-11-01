@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { averageCells, cellShapes } from "../src/kernel.ts";
 import { ASCII_EDGES, bodyGlyph, edgeGlyph, INK_SX, INK_SY, inkCell, inkGlyphs, inkPick, measureShape, readInkCell } from "../src/ascii.ts";
-import { cellSize, inkColour } from "../src/frame.ts";
+import { cellSize, inkColour, inkStrokeAlpha } from "../src/frame.ts";
 import { gridFor } from "../src/surface.ts";
 import { resolveStyle, DARK } from "@hivescape/core";
 
@@ -154,6 +154,11 @@ describe("ink", () => {
     // The push stops where a channel would leave 0..1, so (r - l) : (b - l) stays as it was and the hue holds.
     const l0 = lum(1, 0.7, 0.1);
     expect((r - l) / (b - l)).toBeCloseTo((1 - l0) / (0.1 - l0), 2);
+  });
+  test("a stroke in ink shows as strongly as its colour is bright (dark, on a light look), as a character's density does", () => {
+    expect(inkStrokeAlpha(0.8, 0.8, 0.8, true)).toBeGreaterThan(inkStrokeAlpha(0.3, 0.3, 0.3, true));
+    expect(inkStrokeAlpha(0.03, 0.03, 0.03, true)).toBeLessThan(0.15);
+    expect(inkStrokeAlpha(0.3, 0.3, 0.3, false)).toBeGreaterThan(inkStrokeAlpha(0.8, 0.8, 0.8, false));
   });
   test("on a light look a character is deeper than its colour", () => {
     const [r, g, b] = inkColour(0.6, 0.5, 0.3, false);

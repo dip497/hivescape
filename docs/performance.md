@@ -48,8 +48,11 @@ Garden of the day, native, on Canvas2D: 4.4 ms at ratio 1 and 7.4 ms at 2 (on We
 left to choose). In ascii: 3.0 ms on WebGL and 11.7 ms on Canvas2D.
 
 The living pictures, in ink, 14 420 cells, at 1440 x 900 (measured 2026-11-01, same machine):
-Ejiri (its whole field and sky in the wind) 8.7 ms on WebGL and 19.0 ms on Canvas2D; Aurora 6.1 ms
-and 13.4 ms; The Harvest 7.3 ms and 12.6 ms. The picture is composed once and drawn whole; only its
+Ejiri (its field as blades in the gale, its trees and sky in the wind) 6.5 ms on WebGL
+and 16.3 ms on Canvas2D; Aurora (its curtains as rays) 6.5 ms and 16.3 ms; The Harvest 7.3 ms and
+12.6 ms. Ejiri's field as swaying rows of picture took 8.7 and 19.0 ms: its strokes cost less. On
+the GPU a stroke is one instanced quad; on the 2D canvas they are one path per colour, strength and
+width, stroked once each. The picture is composed once and drawn whole; only its
 moving regions are composed each frame, inside their own boxes. Ink reads each cell from 3 x 3
 samples, one for each of its nine regions. At 6 x 6 (four samples a region, averaged in linear
 light) the picture the scene paints each frame was four times the size, and Ejiri took 22.8 ms on

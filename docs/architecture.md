@@ -111,6 +111,18 @@ its tuning for its own kind.
   patch (a gust's band sweeping across, and each patch's flutter), drawn scaled up and smooth in one
   go. A region's `except` outlines are cut out of its mask, so what stands in it holds still.
 
+  `strokes` draws a region as free strokes instead, off the cell grid, through the overlay's
+  `stroke` (instanced round-ended quads on the GPU; on the 2D canvas one path per colour, strength
+  and width, each stroked once). When the picture is decoded its pixels are kept and its grain
+  measured (`grainOf`: the structure tensor of its brightness, at mask size, smoothed); strokes are
+  seeded once per size (`seedStrokes`) through the region, less its `except` outlines and wherever
+  its `on` test of the picture's colour fails, each along the grain as far as `follow` and `lean`
+  allow. Each frame a blade bends from its root (`bendAt`: away from the wind, in gusts that travel
+  across) or a ray drifts along its curtain (`driftAt`), and takes the picture's colour under it;
+  the cells beneath give way (the region's mask, where strokes grow, drawn over the picture in the
+  ground's colour). In ink a stroke is lifted as a character's colour is and shows as strongly as
+  its tone (`inkStrokeAlpha`).
+
 ## Light
 
 Each cell is shaded by three lights.

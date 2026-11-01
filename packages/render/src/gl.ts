@@ -498,6 +498,44 @@ void main() {
   o = vec4(vCol.rgb * g, g);
 }`;
 
+/** The overlay's strokes: one instanced quad each, round-ended, its coverage from its distance to the segment. */
+const STROKE_VS = /* glsl */ `#version 300 es
+precision highp float;
+layout(location = 0) in vec4 aSeg;
+layout(location = 1) in vec4 aCol;
+layout(location = 2) in float aWidth;
+uniform vec2 uView;
+out vec2 vP;
+flat out vec4 vSeg;
+flat out vec4 vCol;
+flat out float vR;
+const vec2 Q[6] = vec2[6](vec2(0,0), vec2(1,0), vec2(0,1), vec2(0,1), vec2(1,0), vec2(1,1));
+void main() {
+  vec2 a = aSeg.xy, d = aSeg.zw - aSeg.xy;
+  float L = length(d), r = aWidth * 0.5 + 1.0;
+  vec2 u = L > 1e-4 ? d / L : vec2(1.0, 0.0), n = vec2(-u.y, u.x), q = Q[gl_VertexID];
+  vec2 pos = a + u * mix(-r, L + r, q.x) + n * mix(-r, r, q.y);
+  gl_Position = vec4(pos / uView * 2.0 - 1.0, 0.0, 1.0);
+  gl_Position.y = -gl_Position.y;
+  vP = pos; vSeg = aSeg; vCol = aCol; vR = aWidth * 0.5;
+}`;
+
+const STROKE_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform float uDpr;
+in vec2 vP;
+flat in vec4 vSeg;
+flat in vec4 vCol;
+flat in float vR;
+out vec4 o;
+void main() {
+  vec2 pa = vP - vSeg.xy, ba = vSeg.zw - vSeg.xy;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+  float cov = clamp(0.5 - (length(pa - ba * h) - vR) * uDpr, 0.0, 1.0) * vCol.a;
+  if (cov < 0.002) discard;
+  o = vec4(vCol.rgb * cov, cov);
+}`;
+
 type Uniforms = Record<string, WebGLUniformLocation | null>;
 type Program = { p: WebGLProgram; u: Uniforms };
 
@@ -523,7 +561,7 @@ function program(gl: WebGL2RenderingContext, vs: string, fs: string): Program {
   return { p, u };
 }
 
-const PROGRAMS = [[CELLS_VS, CELLS_FS], [SCREEN_VS, SCREEN_FS], [OVERLAY_VS, OVERLAY_FS], [SCREEN_VS, INK_FS]] as const;
+const PROGRAMS = [[CELLS_VS, CELLS_FS], [SCREEN_VS, SCREEN_FS], [OVERLAY_VS, OVERLAY_FS], [SCREEN_VS, INK_FS], [STROKE_VS, STROKE_FS]] as const;
 
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|microsoft basic render/i;
 
@@ -553,6 +591,10 @@ export class GLBackend implements Backend {
   private screen!: Program;
   private over!: Program;
   private inkComp!: Program;
+  private strokeProg!: Program;
+  private strokeVao!: WebGLVertexArrayObject;
+  private strokeBuf!: WebGLBuffer;
+  private strokeData = new Float32Array(0);
   /** ink on a dark look: its characters are drawn into this first, so their glow can spread past their cells. */
   private inkFbo: WebGLFramebuffer | null = null;
   private inkTex: WebGLTexture | null = null;
@@ -594,7 +636,7 @@ export class GLBackend implements Backend {
 
   private init(): void {
     const gl = this.gl;
-    [this.cells, this.screen, this.over, this.inkComp] = PROGRAMS.map(([vs, fs]) => program(gl, vs, fs)) as [Program, Program, Program, Program];
+    [this.cells, this.screen, this.over, this.inkComp, this.strokeProg] = PROGRAMS.map(([vs, fs]) => program(gl, vs, fs)) as [Program, Program, Program, Program, Program];
     this.inkFbo = null; this.inkTex = null; this.inkSize = { w: 0, h: 0 };
     const tex = (min: number, mag: number) => {
       const t = gl.createTexture()!;
@@ -617,6 +659,15 @@ export class GLBackend implements Backend {
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride, 8); gl.vertexAttribDivisor(1, 1);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, 12); gl.vertexAttribDivisor(2, 1);
     gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 28); gl.vertexAttribDivisor(3, 1);
+    gl.bindVertexArray(null);
+    this.strokeVao = gl.createVertexArray()!;
+    this.strokeBuf = gl.createBuffer()!;
+    gl.bindVertexArray(this.strokeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.strokeBuf);
+    const ss = 9 * 4;
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, ss, 0); gl.vertexAttribDivisor(0, 1);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, ss, 16); gl.vertexAttribDivisor(1, 1);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, ss, 32); gl.vertexAttribDivisor(2, 1);
     gl.bindVertexArray(null);
     this.pic = { w: 0, h: 0 };
     this.lit = { w: 0, h: 0 };
@@ -790,8 +841,26 @@ export class GLBackend implements Backend {
       }
     }
 
-    // The overlay: exact characters and dots where the scene put them.
+    // The overlay's strokes, then its exact characters and dots where the scene put them.
     const o = f.overlay;
+    if (o.sn) {
+      if (this.strokeData.length < o.sn * 9) this.strokeData = new Float32Array(Math.max(o.sn * 9, this.strokeData.length * 2));
+      const d = this.strokeData;
+      for (let i = 0; i < o.sn; i++) {
+        d.set(o.seg.subarray(i * 4, i * 4 + 4), i * 9);
+        d.set(o.srgba.subarray(i * 4, i * 4 + 4), i * 9 + 4);
+        d[i * 9 + 8] = o.swidth[i]!;
+      }
+      const sp = this.strokeProg;
+      gl.useProgram(sp.p);
+      gl.uniform2f(sp.u.uView!, this.w, this.h);
+      gl.uniform1f(sp.u.uDpr!, this.dpr);
+      gl.bindVertexArray(this.strokeVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.strokeBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, d.subarray(0, o.sn * 9), gl.STREAM_DRAW);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, o.sn);
+      gl.bindVertexArray(null);
+    }
     if (o.n) {
       if (this.overData.length < o.n * 8) this.overData = new Float32Array(Math.max(o.n * 8, this.overData.length * 2));
       const d = this.overData;
@@ -821,7 +890,9 @@ export class GLBackend implements Backend {
     if (this.inkFbo) gl.deleteFramebuffer(this.inkFbo);
     gl.deleteBuffer(this.overBuf);
     gl.deleteVertexArray(this.overVao);
-    for (const pr of [this.cells, this.screen, this.over, this.inkComp]) gl.deleteProgram(pr.p);
+    gl.deleteBuffer(this.strokeBuf);
+    gl.deleteVertexArray(this.strokeVao);
+    for (const pr of [this.cells, this.screen, this.over, this.inkComp, this.strokeProg]) gl.deleteProgram(pr.p);
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 }

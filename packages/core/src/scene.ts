@@ -123,6 +123,12 @@ export interface Overlay {
   glyph(x: number, y: number, ch: string, colour: Rgb, alpha?: number, scale?: number): void;
   /** A round mark `r` CSS pixels across its core, fading to nothing at `r * (1 + soft)`: an ember, a firefly, a star. */
   dot(x: number, y: number, r: number, colour: Rgb, alpha?: number, soft?: number): void;
+  /**
+   * A thin stroke from `x0, y0` to `x1, y1`, `width` CSS pixels across (default 1.4), round at its
+   * ends, anywhere, off the cell grid: a blade of grass, a ray of light, a hair. In ink it shows as a
+   * character would: its colour lifted as a character's is, and as faint as its colour is dark.
+   */
+  stroke(x0: number, y0: number, x1: number, y1: number, colour: Rgb, alpha?: number, width?: number): void;
 }
 
 export interface Scene<S = unknown> {

@@ -9,7 +9,7 @@ import { ASCII_EDGES, INK_EDGES, INK_SX, INK_SY, inkGlyphs, measureShape, type I
 import { Atlas, ATLAS_COLS } from "./atlas.js";
 import type { Backend, BackendChoice } from "./backend.js";
 import { Canvas2DBackend } from "./c2d.js";
-import { OverlayBatch } from "./frame.js";
+import { inkColourInto, inkStrokeAlpha, OverlayBatch } from "./frame.js";
 import { GLBackend, probeGL } from "./gl.js";
 import { ctx2d, gridFor, loadFont, LS, offscreen, SS, type AnyCanvas, type Ctx2D, type Grid } from "./surface.js";
 
@@ -59,6 +59,9 @@ export class Renderer {
   private backdropDirty = true;
   readonly stats: FrameStats = { ms: 0, backdropDrawn: false };
   private overlayApi: Overlay;
+  /** The look the overlay is being drawn for (ink's strokes are tinted for it), and a colour reused. */
+  private dark = true;
+  private tint = [0, 0, 0];
 
   private constructor(private layers: Layers, backend: Backend, family: string) {
     this.backend = backend;
@@ -72,6 +75,17 @@ export class Renderer {
     this.overlayApi = {
       glyph: (x: number, y: number, ch: string, c: Rgb, alpha = 1, scale = 1) => this.overlay.push(x, y, this.atlas.slot(ch), c[0], c[1], c[2], alpha, scale),
       dot: (x: number, y: number, r: number, c: Rgb, alpha = 1, soft = 0) => this.overlay.push(x, y, -(1 + Math.max(0, soft)), c[0], c[1], c[2], alpha, r),
+      stroke: (x0: number, y0: number, x1: number, y1: number, c: Rgb, alpha = 1, width = 1.4) => {
+        let r = c[0] / 255, g = c[1] / 255, b = c[2] / 255;
+        // In ink a stroke shows as a character would: lifted (deepened) as a character's colour is,
+        // and as faint as its colour is dark (pale, on a light page).
+        if (this.style?.kind === "ink") {
+          alpha *= inkStrokeAlpha(r, g, b, this.dark);
+          inkColourInto(this.tint, r, g, b, this.dark);
+          r = this.tint[0]!; g = this.tint[1]!; b = this.tint[2]!;
+        }
+        if (alpha > 0.01) this.overlay.pushStroke(x0, y0, x1, y1, r, g, b, Math.min(1, alpha), width);
+      },
     };
   }
 
@@ -172,6 +186,7 @@ export class Renderer {
       light = this.light;
     }
     this.overlay.clear();
+    this.dark = world.look.dark;
     scene.overlay?.(state, this.overlayApi, world);
     const fg = this.fg;
     if (fg && (scene.front || this.frontDrawn)) {

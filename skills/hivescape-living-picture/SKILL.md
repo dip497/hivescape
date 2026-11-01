@@ -54,9 +54,23 @@ touch, whether it rains or mist lies in it. Everything else will hold still.
   sways in thin rows and waves of light sweep across it as gusts bend the blades, with each small
   patch fluttering on its own: it bends in place, never slides. `amp` 2-3.5 pixels; `shimmer` 0.1
   (far leaves, sky) to 0.4 (a field, the default); `speed` 0.6 (a breeze) to 1.6 (a gale).
-- **`except`** on `flow` and `wind`: outlines inside the region that hold still. Outline the field
-  or the river generously, then cut out every figure, rock, trunk or building standing in it; a
-  moving region must never touch something that would not move.
+- **`strokes`** for a material made of many marks: a field's blades, an aurora's rays. The region
+  is drawn as free strokes, off the cell grid, as an artist arranges marks into a texture (a grid of
+  characters is a grid; strokes arranged along the grain read as grass), each along the picture's
+  own grain and in its colour, and the cells beneath give way to them.
+  `{ kind: "strokes", motion: "bend", region, except, on, spacing: 8, length: 15, wind: 1, amp: 0.4 }`
+  for grass, wheat and reeds: rooted blades bending away from the wind (`wind` 1 blows right, -1
+  left: read it off the picture's trees, smoke or clothes) in gusts that travel across.
+  `motion: "drift"` for rays of light (`spacing: 11, length: 42, lean: 0.12, follow: 0.3, speed: 9,
+  under: 0.25`): they drift along the curtain and fade toward their ends. `on` tests the picture's
+  colour (`(r, g, b) => (g + b) / 2 - r > 6` keeps a field's greens and leaves its cream paths), so
+  strokes grow only on the material. Prefer it to `wind` for any field you can see blade by blade:
+  `wind`'s light waves are brightness, not motion. Look at it at 100%: too dense reads as bristles
+  (raise `spacing`), crossing strokes mean `lean` is too wide.
+- **`except`** on `flow`, `wind` and `strokes`: outlines inside the region that hold still. Outline
+  the field or the river generously, then cut out every figure, rock, trunk or building standing in
+  it, closely for `strokes` (a loose box leaves a bare patch); a moving region must never touch
+  something that would not move.
 - **`rain`** when the picture is of rain, **`mist`** in bands where the picture has mist,
   **`glow`** on a lamp, a halo or the sun, with a small `pulse` (0.1-0.2).
 - **`levels`** 0.5-0.9 for a faded photograph or a darkened varnish: it stretches the tones once.

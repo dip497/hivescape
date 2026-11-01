@@ -59,6 +59,11 @@ of the cell each covers), so flat light stays calm, and a dark cell none. Each c
 the colour of its cell's bright side, averaged in linear light (never the brown mean of both sides
 of an edge), lifted toward full brightness, on a dim ground of the picture, with a glow.
 
+A material of many marks is drawn as free strokes instead, off the cell grid: Ejiri's field is its
+own blades, laid along the print's grain and bending away from the gale in gusts that run across it;
+Aurora's curtains are their rays, drifting along the arc. Up close a stroke is just a stroke; arranged
+along the picture's grain, the eye reads grass.
+
 | The whole of Lakshmi | Mountain Mist (China, 1898) | Lakshmi by day |
 |---|---|---|
 | ![Lakshmi in ink: the goddess crowned, her red robe and gold, the wheat and the tree behind her](docs/images/painting-lakshmi.webp) | ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) | ![Lakshmi in ink on a light look, like a print](docs/images/painting-lakshmi-light.webp) |

@@ -3,10 +3,10 @@
  * the per-cell flicker hash, the key light's direction and the size a partly covered cell shows at.
  */
 import type { Look, Ripple, StyleSpec } from "@hivescape/core";
-import type { InkGlyphs } from "./ascii.js";
+import { INK_READ, type InkGlyphs } from "./ascii.js";
 import type { AnyCanvas, Grid } from "./surface.js";
 
-/** Exact marks to draw on top this frame, in flat arrays (no object per mark). A dot's slot is `-(1 + soft)`. */
+/** Exact marks to draw on top this frame, in flat arrays (no object per mark). A dot's slot is `-(1 + soft)`; strokes have arrays of their own. */
 export class OverlayBatch {
   n = 0;
   x = new Float32Array(256);
@@ -16,7 +16,24 @@ export class OverlayBatch {
   rgba = new Float32Array(1024);
   scale = new Float32Array(256);
 
-  clear(): void { this.n = 0; }
+  /** Strokes: their ends (x0, y0, x1, y1), straight RGBA 0..1 and width, flat. */
+  sn = 0;
+  seg = new Float32Array(4 * 1024);
+  srgba = new Float32Array(4 * 1024);
+  swidth = new Float32Array(1024);
+
+  clear(): void { this.n = 0; this.sn = 0; }
+
+  pushStroke(x0: number, y0: number, x1: number, y1: number, r: number, g: number, b: number, a: number, width: number): void {
+    if (this.sn === this.swidth.length) {
+      const k = this.swidth.length * 2, f = (a: Float32Array, m: number) => { const b = new Float32Array(k * m); b.set(a); return b; };
+      this.seg = f(this.seg, 4); this.srgba = f(this.srgba, 4); this.swidth = f(this.swidth, 1);
+    }
+    const i = this.sn++;
+    this.seg[i * 4] = x0; this.seg[i * 4 + 1] = y0; this.seg[i * 4 + 2] = x1; this.seg[i * 4 + 3] = y1;
+    this.srgba[i * 4] = r; this.srgba[i * 4 + 1] = g; this.srgba[i * 4 + 2] = b; this.srgba[i * 4 + 3] = a;
+    this.swidth[i] = width;
+  }
 
   push(x: number, y: number, slot: number, r: number, g: number, b: number, a: number, scale: number): void {
     if (this.n === this.x.length) this.grow();
@@ -104,6 +121,16 @@ export const INK = {
   /** The glow round the characters on a dark look: their own light, spread to a quarter and an eighth of the CSS size, added at these shares. */
   glow: [0.3, 0.22],
 } as const;
+
+/**
+ * How strongly a stroke shows in ink, 0..1, from its colour (sRGB 0..1): the brighter its colour (the
+ * darker, on a light look) the stronger, from ink's tone (as a character's density follows it), but
+ * by its square root: a stroke is one bright mark among dark gaps, not an even wash.
+ */
+export function inkStrokeAlpha(r: number, g: number, b: number, dark: boolean): number {
+  const l = Math.sqrt(0.299 * r * r + 0.587 * g * g + 0.114 * b * b);
+  return Math.sqrt(Math.pow(dark ? l : 1 - l, INK_READ.gamma));
+}
 
 /** A character's colour, sRGB 0..1 in and out, from its side of the cell's colour, on a dark look or a light one. */
 export function inkColour(r: number, g: number, b: number, dark: boolean): [number, number, number] {
