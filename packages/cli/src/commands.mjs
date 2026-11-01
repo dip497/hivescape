@@ -126,6 +126,10 @@ export async function film(dir, flags) {
       if (k % fps === 0) process.stdout.write(`\r${name}: ${k}/${n} frames`);
     }
     process.stdout.write("\n");
+    // The last frame as it was drawn (no video compression), for looking at the characters at 100%.
+    const still = path.join(out, `${name}-still.png`);
+    copyFileSync(path.join(frames, `f${String(n - 1).padStart(5, "0")}.png`), still);
+    console.log(`film: ${still}`);
     const mp4 = path.join(out, `${name}.mp4`);
     const enc = (args) => { const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-framerate", String(fps), "-i", path.join(frames, "f%05d.png"), ...args], { encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); };
     enc(["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "slow", "-movflags", "+faststart", mp4]);

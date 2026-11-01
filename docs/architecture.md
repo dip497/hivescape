@@ -81,19 +81,25 @@ its tuning for its own kind.
   A night scene's low ambient is lifted to at least 0.65 here, so characters still read.
 - **pixel**: square cells, with an optional bevel.
 - **native**: the picture itself at the screen's resolution, lit and glowing, with no cells.
-- **ink**: the whole frame in characters, as an ASCII shader over a picture draws it, made for
-  paintings and photographs. The backdrop is drawn into the picture. Beneath the characters is the
-  picture itself, darkened (washed toward the page, on a light look). Each cell is read from its
-  4 × 4 samples for its colour, its brightness and its texture (the structure tensor of its
-  brightness: how strong the texture is, and how much it runs one way). `ascii.ts` (`inkTexture`,
-  `inkGlyph`) and `frame.ts` (`INK`, `inkColour`) hold the rules both backends follow:
-  - texture that runs one way (grass, rain, a roof line) is a stroke along it: `- | \ /`;
-  - any other cell takes a character as dense as it is bright (as dark, on a light look), a little
-    denser where it has texture, from ` .-:*+=%o#@` (ordered by how much of the cell each covers), so
-    the picture's light and dark read in the characters; a dark cell takes none;
-  - a character is its cell's colour, saturated, and brightened the stronger it is; on a dark look
-    it glows (a blurred copy of the characters, added on); on a light one it is deepened instead;
-  - a seam under each row gives the scan lines of a screen.
+- **ink**: the whole frame in characters that carry the picture's light, made for paintings and
+  photographs. The backdrop is drawn into the picture, which is sampled 3 × 3 a cell: one sample for
+  each of a cell's nine regions (three across, so a bar down the middle is its own column, and three
+  down). `ascii.ts` (`readInkCell`, `inkPick`, `inkGlyphs`) and `frame.ts` (`INK`, `inkColour`) hold
+  the rules both backends follow:
+  - each region's tone is its brightness (its darkness, on a light look), bent by a curve and
+    rounded to ten levels;
+  - a cell whose regions differ by enough is an edge: it takes the edge character (`INK_EDGES`:
+    `_ - | / \ ( ) [ ] ^ ' " , . < > ~`) whose shape, measured out of the atlas and taken against
+    its own most covered region, is nearest the cell's (each region against the brightest, sharpened),
+    as bright as the cell's brightest region;
+  - any other cell is a fill: the style's ramp (` .:;+*xo#0`), sorted by each character's measured
+    coverage, gives the character as dense as the cell is bright on average; the blank draws nothing;
+  - the character's colour is the mean, in linear light, of the cell's samples on its bright side
+    (dark side, on a light look), its chroma pushed out as far as it stays in gamut, and lifted
+    toward its full brightness on a dark look (deepened on a light one), so a dark cell is dark
+    because its character is small, not because it is muddy;
+  - beneath, a dim ground of the picture (washed toward the page, on a light look); on a dark look
+    the characters glow, their own light spread to a quarter and an eighth of the CSS size.
 
   `@hivescape/paintings` builds scenes for it from photographs and paintings, which move only where
   they would in life. The picture is composed once, when it is decoded: cropped, its tones stretched
@@ -149,10 +155,14 @@ crosses: they rise toward the light, catch more of it, and their shadows lengthe
   full-layer draws a frame, whatever the cell count, with no cast shadows. The layer is kept at one
   device pixel per CSS pixel.
 
-In ink, the 2D path draws the picture beneath, then writes every cell's character (the pixels it
-covers, read once out of the atlas, in its colour) into one image laid over it, and its glow from a
-quarter-size copy of that image. The GPU draws the picture beneath in the full-screen pass and each
-character's glow from the atlas's own blurred mip levels.
+In ink, the renderer measures every ink character's coverage in the nine regions out of the atlas
+once per atlas version (`Renderer.inkGlyphs`), and both backends take the same lists. The 2D path
+reads each cell, picks its character (cached on the rounded reading), writes the pixels it covers,
+read once out of the atlas, in its colour, into one image laid over the dim ground, and adds its
+glow from a quarter- and an eighth-size copy of that image. The GPU reads and picks per instance in
+the vertex shader, draws the ground in the full-screen pass and, on a dark look, the characters
+into a framebuffer of their own, whose mip chain gives the glow at the same CSS spread; a last
+full-screen pass lays them and their glow over the ground.
 
 A native scene (its whole picture at full resolution) gains nothing from WebGL and would upload a
 full-resolution picture every frame there; when the backend is left to choose, `Engine` draws a

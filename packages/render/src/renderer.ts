@@ -5,8 +5,8 @@
  * lights every frame, and keeps its own time for each, so a calm scene costs a calm amount.
  */
 import type { Look, Overlay, Rgb, Scene, Size, StyleSpec, World } from "@hivescape/core";
-import { ASCII_EDGES, INK_STROKES } from "./ascii.js";
-import { Atlas } from "./atlas.js";
+import { ASCII_EDGES, INK_EDGES, INK_SX, INK_SY, inkGlyphs, measureShape, type InkGlyphs } from "./ascii.js";
+import { Atlas, ATLAS_COLS } from "./atlas.js";
 import type { Backend, BackendChoice } from "./backend.js";
 import { Canvas2DBackend } from "./c2d.js";
 import { OverlayBatch } from "./frame.js";
@@ -49,6 +49,12 @@ export class Renderer {
   private style!: StyleSpec;
   private ramp: number[] = [];
   private edges: number[] = [];
+  /** The picture's samples per cell, across and down (ink reads 4 x 6, every other style SS x SS). */
+  private sx = SS;
+  private sy = SS;
+  /** ink: its characters, measured out of the atlas, and the atlas version they were measured at. */
+  private ink: InkGlyphs | null = null;
+  private inkAt = -1;
   private backdropAt = -Infinity;
   private backdropDirty = true;
   readonly stats: FrameStats = { ms: 0, backdropDrawn: false };
@@ -89,8 +95,10 @@ export class Renderer {
     this.grid = gridFor(size, style);
     // A native picture is drawn at the screen's resolution; any other is sampled into cells.
     const native = style.kind === "native";
-    const pw = native ? Math.max(1, Math.round(size.w * size.dpr)) : this.grid.cols * SS;
-    const ph = native ? Math.max(1, Math.round(size.h * size.dpr)) : this.grid.rows * SS;
+    this.sx = style.kind === "ink" ? INK_SX : SS;
+    this.sy = style.kind === "ink" ? INK_SY : SS;
+    const pw = native ? Math.max(1, Math.round(size.w * size.dpr)) : this.grid.cols * this.sx;
+    const ph = native ? Math.max(1, Math.round(size.h * size.dpr)) : this.grid.rows * this.sy;
     if (this.picture.width !== pw || this.picture.height !== ph) { this.picture.width = pw; this.picture.height = ph; }
     const lw = this.grid.cols * LS, lh = this.grid.rows * LS;
     if (this.light.width !== lw || this.light.height !== lh) { this.light.width = lw; this.light.height = lh; }
@@ -103,7 +111,8 @@ export class Renderer {
     this.backend.resize(size.w, size.h, size.dpr);
     this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "ascii" ? 0.82 : style.kind === "ink" ? 0.95 : 0.6);
     this.ramp = this.atlas.slots(style.ramp || " ");
-    this.edges = this.atlas.slots(style.kind === "ink" ? INK_STROKES : ASCII_EDGES);
+    this.edges = this.atlas.slots(style.kind === "ink" ? INK_EDGES : ASCII_EDGES);
+    this.inkAt = -1;
     this.backdropDirty = true;
   }
 
@@ -111,6 +120,18 @@ export class Renderer {
   invalidateBackdrop(): void { this.backdropDirty = true; }
 
   get cells(): Grid { return this.grid; }
+
+  /** ink's characters, measured once per atlas version (a new character elsewhere redraws the atlas, the same shapes). */
+  private inkGlyphs(): InkGlyphs | null {
+    const a = this.atlas;
+    if (this.style.kind !== "ink") return null;
+    if (a.version === this.inkAt && this.ink) return this.ink;
+    const W = a.canvas.width, d = ctx2d(a.canvas).getImageData(0, 0, W, a.canvas.height).data;
+    const measure = (slot: number) => ({ slot, cover: measureShape(d, W, (slot % ATLAS_COLS) * a.slotW, Math.floor(slot / ATLAS_COLS) * a.slotH, a.slotW, a.slotH) });
+    this.ink = inkGlyphs([...new Set(this.ramp)].map(measure), this.edges.map(measure));
+    this.inkAt = a.version;
+    return this.ink;
+  }
 
   frame<S>(scene: Scene<S>, state: S, world: World): void {
     const t0 = performance.now();
@@ -132,10 +153,10 @@ export class Renderer {
     pg.clearRect(0, 0, this.picture.width, this.picture.height);
     if (this.style.kind === "ink") {
       // ink draws the whole frame in characters: the backdrop is sampled too, under the picture.
-      pg.drawImage(this.layers.backdrop as CanvasImageSource, 0, 0, this.layers.backdrop.width, this.layers.backdrop.height, 0, 0, (w / cw) * SS, (h / ch) * SS);
+      pg.drawImage(this.layers.backdrop as CanvasImageSource, 0, 0, this.layers.backdrop.width, this.layers.backdrop.height, 0, 0, (w / cw) * this.sx, (h / ch) * this.sy);
     }
     if (this.style.kind === "native") pg.setTransform(dpr, 0, 0, dpr, 0, 0);
-    else pg.setTransform(SS / cw, 0, 0, SS / ch, 0, 0);
+    else pg.setTransform(this.sx / cw, 0, 0, this.sy / ch, 0, 0);
     scene.picture(state, pg, world);
     let light: AnyCanvas | null = null;
     if (scene.light) {
@@ -163,7 +184,7 @@ export class Renderer {
     const p = world.input.pointer;
     this.backend.draw({
       picture: this.picture, grid: this.grid, style: this.style, look: world.look, time: world.time,
-      pointer: { x: p.x, y: p.y, active: p.active }, ripples: world.effects.ripples, ramp: this.ramp, edges: this.edges, overlay: this.overlay, light,
+      pointer: { x: p.x, y: p.y, active: p.active }, ripples: world.effects.ripples, ramp: this.ramp, edges: this.edges, ink: this.inkGlyphs(), overlay: this.overlay, light,
     }, this.atlas);
     this.stats.ms = performance.now() - t0;
     void w; void h;

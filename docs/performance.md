@@ -47,14 +47,20 @@ Garden of the day, native, on Canvas2D: 4.4 ms at ratio 1 and 7.4 ms at 2 (on We
 34.4 ms, the full-resolution upload; so a native scene now takes the 2D canvas when the backend is
 left to choose). In ascii: 3.0 ms on WebGL and 11.7 ms on Canvas2D.
 
-The living pictures, in ink, 14 420 cells, at 1440 x 900: Ejiri (its whole field and sky in the
-wind) 10.0 ms on WebGL and 15.1 ms on Canvas2D; The Harvest 6.8 ms and 12.7 ms. The picture is
-composed once and drawn whole; only its moving regions are composed each frame, inside their own
-boxes. Ink reads each cell from 4 x 4 samples: at 8 x 8 the texture reads a little truer, but Ejiri
-then took 36.9 ms on WebGL and 48.1 ms on Canvas2D (the picture the scene paints each frame is four
-times the size), and the characters it picked were nearly the same. The 2D path writes every
-character into one image and its glow into a quarter-size copy: stamping a character per cell with
-the canvas took 61.4 ms.
+The living pictures, in ink, 14 420 cells, at 1440 x 900 (measured 2026-11-01, same machine):
+Ejiri (its whole field and sky in the wind) 8.7 ms on WebGL and 19.0 ms on Canvas2D; Aurora 6.1 ms
+and 13.4 ms; The Harvest 7.3 ms and 12.6 ms. The picture is composed once and drawn whole; only its
+moving regions are composed each frame, inside their own boxes. Ink reads each cell from 3 x 3
+samples, one for each of its nine regions. At 6 x 6 (four samples a region, averaged in linear
+light) the picture the scene paints each frame was four times the size, and Ejiri took 22.8 ms on
+WebGL and 44.4 ms on Canvas2D for characters that read the same.
+
+On the 2D path a cell's tone comes from a table, not a power and a root per region, and its
+character is cached on its rounded reading, so an edge is matched once per distinct cell. Writing
+only the cells whose samples and light changed did not pay: the living pictures change 40 to 80% of
+their cells every frame (wind, a breathing glow), and the check cost more than it saved. The 2D path
+writes every character into one image and its glow into a quarter- and an eighth-size copy:
+stamping a character per cell with the canvas took 61.4 ms.
 
 At 30 frames a second, a frame may take 33 ms. Below 20 ms of script, the scene stays under
 Hivemind's 60% limit.
@@ -75,7 +81,7 @@ What the numbers say:
 
 ## Choices made for cost
 
-- The **picture is sampled at 4 × 4 a cell, and the light at 2 × 2**, not at screen resolution.
+- The **picture is sampled at 4 × 4 a cell (3 × 3 in ink), and the light at 2 × 2**, not at screen resolution.
   Painting is the biggest share of a frame, and it scales with these sizes, not with the screen.
 - **The GPU averages the cells** (mipmaps) and **places them** (instancing). The CPU uploads two
   small textures and a few uniforms.

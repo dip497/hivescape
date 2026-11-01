@@ -3,6 +3,7 @@
  * the per-cell flicker hash, the key light's direction and the size a partly covered cell shows at.
  */
 import type { Look, Ripple, StyleSpec } from "@hivescape/core";
+import type { InkGlyphs } from "./ascii.js";
 import type { AnyCanvas, Grid } from "./surface.js";
 
 /** Exact marks to draw on top this frame, in flat arrays (no object per mark). A dot's slot is `-(1 + soft)`. */
@@ -32,7 +33,7 @@ export class OverlayBatch {
 }
 
 export interface FrameInput {
-  /** The scene's subjects, `grid.cols * SS` by `grid.rows * SS`, transparent where there is nothing. */
+  /** The scene's subjects, `grid.cols * SS` by `grid.rows * SS` (ink: `INK_SX` by `INK_SY` a cell), transparent where there is nothing. */
   picture: AnyCanvas;
   grid: Grid;
   style: StyleSpec;
@@ -42,6 +43,8 @@ export interface FrameInput {
   ripples: readonly Ripple[];
   /** Atlas slots of the style's ramp, light to full. */
   ramp: readonly number[];
+  /** ink: its fill and edge characters, measured (ascii.ts's `inkGlyphs`); null for any other style. */
+  ink: InkGlyphs | null;
   /** Atlas slots of the ascii style's edge characters (`ASCII_EDGES`), in order. */
   edges: readonly number[];
   overlay: OverlayBatch;
@@ -82,27 +85,42 @@ export function cellHash(i: number, j: number, tick: number): number {
 export const lightness = (r: number, g: number, b: number): number => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
 /**
- * How the ink style colours a frame, as an ASCII shader over a picture does: the picture itself beneath,
- * darkened (washed toward the page, on a light look), and over it each cell's character in the cell's
- * own colour, saturated and brightened by its strength (deepened, on a light look), glowing; a seam
- * under each row as a screen's scan lines. Both backends read these.
+ * How the ink style colours a frame. The characters carry the picture's light: each is drawn in the
+ * colour of its cell's bright side, its chroma pushed out (kept in gamut, so no hue turns) and, on a
+ * dark look, lifted toward that colour's full brightness, so a dark cell is dark because its character
+ * is small, not because it is muddy. Beneath them a dim ground of the picture; round them their glow.
+ * On a light look the characters are deepened and the ground washed toward the page, like a print.
+ * Both backends read these.
  */
 export const INK = {
-  /** The picture beneath: its share on a dark look; on a light one, how far it is washed toward the page. */
-  base: { dark: 0.38, light: 0.5 },
-  /** How far a character's colour is pushed from grey. */
-  sat: 2.0,
-  /** How much of the characters spills round them as glow (dark look). */
-  glow: 0.8,
-  /** The scan line under each row: what it leaves of the brightness. */
-  seam: { dark: 0.5, light: 0.86 },
+  /** The ground beneath the characters: on a dark look the picture at this share; on a light one, how far it is washed toward the page. */
+  base: { dark: 0.16, light: 0.84 },
+  /** How far a character's colour is pushed from its own grey. */
+  chroma: 1.35,
+  /** On a dark look, how far a character's colour is lifted toward its full brightness (0 none, 1 all the way). */
+  lift: 0.72,
+  /** On a light look, the share of its colour a character is drawn in. */
+  deep: 0.62,
+  /** The glow round the characters on a dark look: their own light, spread to a quarter and an eighth of the CSS size, added at these shares. */
+  glow: [0.3, 0.22],
 } as const;
 
-/** A character's colour, 0..1 in and out, from its cell's colour and the character's strength `s` (0..1). */
-export function inkColour(r: number, g: number, b: number, dark: boolean, s: number): [number, number, number] {
-  const l = 0.299 * r + 0.587 * g + 0.114 * b, k = INK.sat;
-  r = Math.min(1, Math.max(0, l + (r - l) * k)); g = Math.min(1, Math.max(0, l + (g - l) * k)); b = Math.min(1, Math.max(0, l + (b - l) * k));
-  if (dark) { const m = 0.8 + s, a = 0.05 * s; return [Math.min(1, r * m + a), Math.min(1, g * m + a), Math.min(1, b * m + a)]; }
-  const m = 0.55 - 0.15 * s;
-  return [r * m, g * m, b * m];
+/** A character's colour, sRGB 0..1 in and out, from its side of the cell's colour, on a dark look or a light one. */
+export function inkColour(r: number, g: number, b: number, dark: boolean): [number, number, number] {
+  const out: [number, number, number] = [0, 0, 0];
+  inkColourInto(out, r, g, b, dark);
+  return out;
 }
+
+/** `inkColour` written into `out` (the 2D path calls it per character, so it makes nothing). */
+export function inkColourInto(out: number[], r: number, g: number, b: number, dark: boolean): void {
+  const l = 0.299 * r + 0.587 * g + 0.114 * b;
+  // The chroma push, as far as INK.chroma or until a channel would leave 0..1, whichever comes first.
+  let k: number = INK.chroma;
+  k = pushLimit(k, r, l); k = pushLimit(k, g, l); k = pushLimit(k, b, l);
+  r = l + (r - l) * k; g = l + (g - l) * k; b = l + (b - l) * k;
+  if (!dark) { out[0] = r * INK.deep; out[1] = g * INK.deep; out[2] = b * INK.deep; return; }
+  const m = Math.max(r, g, b), f = m > 1e-4 ? (1 / m) * INK.lift + (1 - INK.lift) : 1;
+  out[0] = Math.min(1, r * f); out[1] = Math.min(1, g * f); out[2] = Math.min(1, b * f);
+}
+const pushLimit = (k: number, c: number, l: number): number => (c > l + 1e-6 ? Math.min(k, (1 - l) / (c - l)) : c < l - 1e-6 ? Math.min(k, l / (l - c)) : k);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { averageCells, cellShapes } from "../src/kernel.ts";
-import { ASCII_EDGES, bodyGlyph, edgeGlyph, INK_STROKES, inkGlyph, inkTexture } from "../src/ascii.ts";
+import { ASCII_EDGES, bodyGlyph, edgeGlyph, INK_SX, INK_SY, inkCell, inkGlyphs, inkPick, measureShape, readInkCell } from "../src/ascii.ts";
 import { cellSize, inkColour } from "../src/frame.ts";
 import { gridFor } from "../src/surface.ts";
 import { resolveStyle, DARK } from "@hivescape/core";
@@ -74,59 +74,89 @@ describe("ascii", () => {
 
 describe("ink", () => {
   const lum = (r: number, g: number, b: number) => 0.299 * r + 0.587 * g + 0.114 * b;
-  /** A cell's 4 x 4 samples, row by row, from `f(x, y)` over the cell (0..1 each way). */
-  const cell = (f: (x: number, y: number) => number) => Array.from({ length: 16 }, (_, k) => f(((k % 4) + 0.5) / 4, (Math.floor(k / 4) + 0.5) / 4));
-  /** Stripes `period` of a cell apart, running at `deg` degrees (0 across, 90 down the screen). */
-  const stripes = (deg: number, period = 0.5) => cell((x, y) => {
-    const a = (deg * Math.PI) / 180, d = -x * Math.sin(a) * (8 / 12) + y * Math.cos(a);
-    return 0.5 + 0.4 * Math.sin((2 * Math.PI * d) / period);
-  });
-  const glyphOf = (tone: number, Lu: number[]) => { const g = inkGlyph(tone, inkTexture(Lu, 4, 8, 12), 9); return g[0] === 1 ? INK_STROKES[g[1]] : g[0] === 2 ? "ramp" : "none"; };
+  /** A character's bitmap, 16 x 24 (a slot), inked where `paint(x, y)` (0..1 each way), and its measured coverage. */
+  const glyph = (slot: number, paint: (x: number, y: number) => boolean) => {
+    const w = 16, h = 24, px = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (paint((x + 0.5) / w, (y + 0.5) / h)) px[(y * w + x) * 4 + 3] = 255;
+    return { slot, cover: measureShape(px, w, 0, 0, w, h) };
+  };
+  /** An even fill character covering about `share` of its cell (a dither of that density). */
+  const even = (slot: number, share: number) => glyph(slot, (x, y) => ((Math.floor(x * 16) * 7 + Math.floor(y * 24) * 3) % 10) / 10 < share);
+  const EDGES = { 10: "_", 11: "|", 12: "[", 13: "/", 14: "-" } as Record<number, string>;
+  const set = inkGlyphs(
+    [even(1, 0.6), even(0, 0), even(3, 0.1), even(2, 0.3)],
+    [glyph(10, (x, y) => y > 0.84), glyph(11, (x) => Math.abs(x - 0.5) < 0.12), glyph(12, (x) => x < 0.22), glyph(13, (x, y) => Math.abs((1 - y) - x) < 0.13), glyph(14, (x, y) => Math.abs(y - 0.5) < 0.07)],
+  );
+  /** A cell's samples (INK_SX x INK_SY, RGBA), coloured by `paint(x, y)` (0..1 each way) as sRGB 0..255. */
+  const cellPx = (paint: (x: number, y: number) => readonly number[]) => {
+    const px = new Uint8ClampedArray(INK_SX * INK_SY * 4);
+    for (let v = 0; v < INK_SY; v++) for (let u = 0; u < INK_SX; u++) px.set([...paint((u + 0.5) / INK_SX, (v + 0.5) / INK_SY), 255], (v * INK_SX + u) * 4);
+    return px;
+  };
+  const read = (paint: (x: number, y: number) => readonly number[], dark = true) => { const c = inkCell(); readInkCell(cellPx(paint), INK_SX, 0, 0, dark, c); return c; };
+  const pick = (paint: (x: number, y: number) => readonly number[], dark = true) => {
+    const p = inkPick(read(paint, dark).tone, set);
+    return p[0] === 0 ? "none" : p[0] === 1 ? EDGES[set.edges[p[1]]!]! : `fill ${set.fill[p[1]]}`;
+  };
+  const W = [255, 255, 255], K = [0, 0, 0];
 
-  test("texture that runs one way is drawn as a stroke along it", () => {
-    expect(glyphOf(0.7, stripes(0))).toBe("-");
-    expect(glyphOf(0.7, stripes(90))).toBe("|");
-    // y runs down the screen: down to the right is a backslash, up to the right a slash.
-    expect(glyphOf(0.7, stripes(45))).toBe("\\");
-    expect(glyphOf(0.7, stripes(-45))).toBe("/");
+  test("a cell with an edge in it takes the edge character shaped like it: low `_`, down the middle `|`, a left side `[`, a diagonal `/`", () => {
+    expect(pick((x, y) => (y > 0.66 ? W : K))).toBe("_");
+    expect(pick((x) => (x > 0.33 && x < 0.67 ? W : K))).toBe("|");
+    expect(pick((x) => (x < 0.33 ? W : K))).toBe("[");
+    expect(pick((x, y) => (Math.abs((1 - y) - x) < 0.2 ? W : K))).toBe("/");
+    expect(pick((x, y) => (y > 0.33 && y < 0.67 ? W : K))).toBe("-");
   });
-  test("a character is as dense as its cell is bright, so the picture's light and dark read; a dark cell takes none", () => {
-    const flat = inkTexture(cell(() => 0.6), 4, 8, 12);
-    expect(flat.tex).toBeLessThan(0.01);
-    const at = (tone: number) => inkGlyph(tone, flat, 11);
-    // Brighter, denser: up the ramp (which runs from least ink to most) as the tone rises.
-    expect(at(0.95)[0]).toBe(2);
-    expect(at(0.95)[1]!).toBeGreaterThan(at(0.6)[1]!);
-    expect(at(0.6)[1]!).toBeGreaterThan(at(0.3)[1]!);
-    expect(at(0.95)[1]!).toBeGreaterThanOrEqual(8);
-    // Texture adds a little: the same brightness full of texture sits a step or so higher.
-    const busy = inkGlyph(0.6, { tex: 1, coh: 0, angle: 0 }, 11);
-    expect(busy[1]!).toBeGreaterThan(at(0.6)[1]!);
-    expect(busy[1]! - at(0.6)[1]!).toBeLessThanOrEqual(3);
-    expect(inkGlyph(0.05, inkTexture(stripes(0), 4, 8, 12), 11)[0]).toBe(0);
+  test("a flat cell takes an even fill, denser the brighter it is; a dark one takes nothing", () => {
+    const at = (v: number) => pick(() => [v, v, v]);
+    expect(at(8)).toBe("none");
+    // Fills by their measured coverage: slot 3 (0.1) < slot 2 (0.3) < slot 1 (0.6).
+    expect([at(110), at(170), at(255)]).toEqual(["fill 3", "fill 2", "fill 1"]);
   });
-  test("texture that runs no one way (a speckle) takes a ramp character, not a stroke", () => {
-    // Blobs two samples across, bright and dark in turn both ways: texture, but running no one way.
-    const speckle = cell((x, y) => ((Math.floor(x * 2) + Math.floor(y * 2)) % 2 ? 0.9 : 0.2));
-    const t = inkTexture(speckle, 4, 8, 12);
-    expect(t.tex).toBeGreaterThan(0.5);
-    expect(glyphOf(0.6, speckle)).toBe("ramp");
+  test("the fill is ordered by measured coverage, whatever order it is given in, the densest at level 1", () => {
+    expect(set.fill).toEqual([0, 3, 2, 1]);
+    expect(set.levels[0]).toBe(0);
+    expect(set.levels[3]).toBeCloseTo(1, 5);
+    for (let k = 1; k < set.levels.length; k++) expect(set.levels[k]!).toBeGreaterThan(set.levels[k - 1]!);
   });
-  test("a character shows more strongly the brighter its cell", () => {
-    const t = inkTexture(stripes(90), 4, 8, 12);
-    expect((inkGlyph(0.9, t, 9) as number[])[2]!).toBeGreaterThan((inkGlyph(0.4, t, 9) as number[])[2]!);
+  test("a cell across an edge takes its bright side's colour, not the mean of both sides", () => {
+    const c = read((x) => (x < 0.5 ? [230, 40, 30] : [10, 60, 20]));
+    expect(c.ink[0]!).toBeGreaterThan(0.85);
+    expect(c.ink[1]!).toBeLessThan(0.2);
+    // On a light page the character is the dark part: here, the dark green.
+    const l = read((x) => (x < 0.5 ? [230, 200, 190] : [10, 60, 20]), false);
+    expect(l.ink[1]!).toBeGreaterThan(l.ink[0]! * 2);
   });
-  test("on a dark look a character is its cell's colour, more saturated and brighter the stronger it is", () => {
-    const [r, g, b] = inkColour(0.5, 0.4, 0.3, true, 1), [r0, g0, b0] = inkColour(0.5, 0.4, 0.3, true, 0.3);
-    expect(lum(r, g, b)).toBeGreaterThan(lum(r0, g0, b0));
-    expect(lum(r, g, b)).toBeGreaterThan(lum(0.5, 0.4, 0.3));
-    // Hue kept and pushed apart from grey: red stays above green above blue, and the colour's spread
-    // against its brightness grows (brightening alone would keep that ratio).
+  test("a character's colour is averaged in linear light, so a mix of two bright colours does not dull", () => {
+    // Red and a green of the same brightness on the bright side, black below: averaged as sRGB numbers
+    // the red would sit at 0.5; in linear light it is 0.71.
+    const c = read((x, y) => (y > 0.66 ? K : (Math.floor(x * INK_SX) + Math.floor(y * INK_SY)) % 2 ? [0, 182, 0] : [255, 0, 0]));
+    expect(c.ink[0]!).toBeGreaterThan(0.68);
+    expect(c.ink[1]!).toBeGreaterThan(0.48);
+  });
+  test("on a light look tone is darkness: a dark cell asks for ink, a pale one for none", () => {
+    expect(read(() => [20, 20, 20], false).tone[4]!).toBeGreaterThan(0.8);
+    expect(pick(() => [250, 250, 250], false)).toBe("none");
+  });
+  test("an edge in a dim part of the picture shows dimmer than one in a bright part", () => {
+    const st = (v: number) => (inkPick(read((x, y) => (y > 0.66 ? [v, v, v] : K)).tone, set) as number[])[2]!;
+    expect(st(255)).toBeGreaterThan(st(150));
+  });
+  test("on a dark look a character is lifted toward its colour's full brightness, its hue kept", () => {
+    const [r, g, b] = inkColour(0.3, 0.2, 0.1, true);
+    expect(Math.max(r, g, b)).toBeGreaterThan(0.75);
     expect(r > g && g > b).toBe(true);
-    expect((r - b) / lum(r, g, b)).toBeGreaterThan(1.5 * ((0.5 - 0.3) / lum(0.5, 0.4, 0.3)));
   });
-  test("on a light look a character is deeper than its cell's colour", () => {
-    const [r, g, b] = inkColour(0.6, 0.5, 0.3, false, 1);
-    expect(lum(r, g, b)).toBeLessThan(lum(0.6, 0.5, 0.3) * 0.6);
+  test("pushing a colour's chroma never clips it: the channels keep their proportions round its grey", () => {
+    // A saturated orange: pushed 1.35 times as is, red would pass 1 and blue fall below 0.
+    const [r, g, b] = inkColour(1, 0.7, 0.1, true), l = lum(r, g, b);
+    for (const c of [r, g, b]) { expect(c).toBeLessThanOrEqual(1); expect(c).toBeGreaterThanOrEqual(0); }
+    // The push stops where a channel would leave 0..1, so (r - l) : (b - l) stays as it was and the hue holds.
+    const l0 = lum(1, 0.7, 0.1);
+    expect((r - l) / (b - l)).toBeCloseTo((1 - l0) / (0.1 - l0), 2);
+  });
+  test("on a light look a character is deeper than its colour", () => {
+    const [r, g, b] = inkColour(0.6, 0.5, 0.3, false);
+    expect(lum(r, g, b)).toBeLessThan(lum(0.6, 0.5, 0.3) * 0.7);
   });
 });

@@ -47,61 +47,150 @@ export const bodyGlyph = (l: number, n: number, jitter = 0): number => Math.min(
 export const CUT = { dark: 0.3, light: 0.52 } as const;
 
 /**
- * The ink style's rules (the GPU's shader mirrors them), as an ASCII shader over a picture draws: each
- * cell is read for its texture (how strong, and how much it runs one way), and takes either a stroke
- * along that texture (grass `/`, rain `|`, a roof line `-`) or a character as dense as it is bright.
+ * The ink style's rules (the GPU's shader mirrors them). The characters carry the picture's light, on a
+ * dim ground. Each cell is read as nine regions' tone (three across, three down). A cell with real
+ * contrast inside it is an edge: it takes the edge character whose shape, measured out of the font, is
+ * nearest the cell's own (a bright lower edge `_`, a bright left side `[`, a bright diagonal `/`). Any
+ * other cell is a fill: an even character, denser the brighter the cell, from a ramp ordered by each
+ * character's measured coverage, so flat light stays calm. The character is drawn in the colour of the
+ * cell's bright part (its dark part, on a light page), never the mean of both sides of an edge; colours
+ * are averaged in linear light.
  */
-
-/** Ink's stroke characters, by `inkStroke`'s index: along the texture. */
-export const INK_STROKES = "-|\\/";
-
-/** A cell's texture from its `ss x ss` samples of brightness `Lu` (row by row), in a `cw x ch` cell. */
-export interface InkTexture {
-  /** How much texture, 0..1. */
-  tex: number;
-  /** How much it runs one way, 0 (no way) .. 1 (all one way). */
-  coh: number;
-  /** The direction brightness changes fastest in, radians, y down (the texture runs across it). */
-  angle: number;
-}
-
-/** How strongly texture registers: the brightness change per two pixels at which `tex` reaches 1, inverted. */
-export const INK_TEXTURE_GAIN = 6;
-
-/** A cell's texture: the structure tensor of its samples' brightness, the change measured per two pixels. */
-export function inkTexture(Lu: ArrayLike<number>, ss: number, cw: number, ch: number): InkTexture {
-  const kx = (2 * ss) / cw, ky = (2 * ss) / ch;
-  let jxx = 0, jyy = 0, jxy = 0, n = 0;
-  for (let v = 0; v < ss - 1; v++) for (let u = 0; u < ss - 1; u++) {
-    const a = Lu[v * ss + u]!, b = Lu[v * ss + u + 1]!, c = Lu[(v + 1) * ss + u]!, d = Lu[(v + 1) * ss + u + 1]!;
-    const dx = ((b - a + d - c) / 2) * kx, dy = ((c - a + d - b) / 2) * ky;
-    jxx += dx * dx; jyy += dy * dy; jxy += dx * dy; n++;
-  }
-  jxx /= n; jyy /= n; jxy /= n;
-  const e = jxx + jyy;
-  return { tex: Math.min(1, Math.sqrt(e) * INK_TEXTURE_GAIN), coh: e > 1e-9 ? Math.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / e : 0, angle: 0.5 * Math.atan2(2 * jxy, jxx - jyy) };
-}
-
-/** The stroke along a texture whose brightness changes fastest at `angle`: an index into `INK_STROKES`. */
-export function inkStroke(angle: number): number {
-  const a = (((angle + Math.PI / 2) % Math.PI) + Math.PI) % Math.PI;
-  if (a < Math.PI / 8 || a > (7 * Math.PI) / 8) return 0;
-  if (a > (3 * Math.PI) / 8 && a < (5 * Math.PI) / 8) return 1;
-  return a < Math.PI / 2 ? 2 : 3;
-}
-
-/** The thresholds: no character below `none` of tone; a stroke where texture is at least `tex` and runs one way at least `coh`. */
-export const INK_PICK = { none: 0.08, tex: 0.45, coh: 0.55 } as const;
 
 /**
- * Which character an ink cell takes, and how strongly it shows (0..1): `[0]` none, `[1, stroke, s]`
- * along strong one-way texture, `[2, ramp index, s]` as dense as the cell is bright (texture adds a
- * little), so the picture's light and dark read in the characters. `tone` is the cell's brightness on
- * a dark look (its darkness on a light one), 0..1; the ramp runs from least to most ink.
+ * The regions a cell is read in, row by row: 3 across (so a bar down the middle, `|`, is its own column,
+ * not an even grey) and 3 down; each region is `INK_SPR x INK_SPR` samples of the picture.
  */
-export function inkGlyph(tone: number, t: InkTexture, rampLen: number): [0] | [1 | 2, number, number] {
-  if (tone < INK_PICK.none) return [0];
-  if (t.tex > INK_PICK.tex && t.coh > INK_PICK.coh) return [1, inkStroke(t.angle), 0.55 + 0.45 * tone];
-  const q = Math.min(1, tone * (0.85 + 0.25 * t.tex)), k = Math.min(rampLen - 1, Math.floor(q * rampLen));
-  return k <= 0 ? [0] : [2, k, 0.4 + 0.6 * q];
+export const INK_RX = 3;
+export const INK_RY = 3;
+export const INK_REGIONS = INK_RX * INK_RY;
+export const INK_SPR = 1;
+/** Ink samples per cell, across and down. */
+export const INK_SX = INK_RX * INK_SPR;
+export const INK_SY = INK_RY * INK_SPR;
+/** Ink's edge characters: lines and brackets, each a shape that sits somewhere in the cell. */
+export const INK_EDGES = "_-|/\\()[]^'\",.`<>~";
+/** The most fill and edge characters ink takes (the GPU's uniform arrays are sized for them). */
+export const INK_MAX_FILL = 16;
+export const INK_MAX_EDGES = 32;
+
+/** The cheap square law between sRGB and linear light (as a terminal viewer averages): 0..255 in, 0..1 out. */
+export const toLinear = (v: number): number => (v / 255) * (v / 255);
+export const fromLinear = (v: number): number => Math.sqrt(Math.max(0, v));
+const LIN = Float32Array.from({ length: 256 }, (_, v) => toLinear(v));
+
+/**
+ * How a cell is read and matched. `gamma` bends tone (above 1 darkens the middle, so more of a
+ * picture is left as ground); `levels` is how finely a region's tone is told apart (both backends
+ * round to it); a cell whose regions differ by at least `edge` is tried as an edge, its shape
+ * sharpened by `crunch` (each region against the brightest, raised to it), and it takes the nearest
+ * edge character when that is within `fit` (the squared distance over the nine regions).
+ */
+export const INK_READ = { gamma: 1.6, levels: 10, edge: 0.3, crunch: 1.8, fit: 2.2 } as const;
+
+/** One character's coverage in each region, 0..1, from its alpha (0..255, RGBA) in a slot `w x h` at `x0, y0` of an image `stride` wide. */
+export function measureShape(rgba: ArrayLike<number>, stride: number, x0: number, y0: number, w: number, h: number): number[] {
+  const out = new Array<number>(INK_REGIONS).fill(0), n = new Array<number>(INK_REGIONS).fill(0);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const k = Math.min(INK_RY - 1, Math.floor((y * INK_RY) / h)) * INK_RX + Math.min(INK_RX - 1, Math.floor((x * INK_RX) / w));
+    out[k]! += rgba[((y0 + y) * stride + x0 + x) * 4 + 3]! / 255; n[k]!++;
+  }
+  return out.map((v, k) => v / Math.max(1, n[k]!));
+}
+
+/** The characters ink draws with, as both backends take them. */
+export interface InkGlyphs {
+  /** Fill characters' atlas slots, least ink first (the blank first of all), and each one's coverage against the densest (0..1). */
+  fill: number[];
+  levels: Float32Array;
+  /** Edge characters' atlas slots, and each one's shape: its coverage in each region against its own most covered region, `INK_REGIONS` numbers each. */
+  edges: number[];
+  shapes: Float32Array;
+}
+
+/**
+ * Ink's characters from their measured coverage (`measureShape` of each): the fill sorted by how much
+ * ink it lays down, and each edge character's shape as a pattern (its brightest region 1).
+ */
+export function inkGlyphs(fill: readonly { slot: number; cover: readonly number[] }[], edges: readonly { slot: number; cover: readonly number[] }[]): InkGlyphs {
+  const mean = (c: readonly number[]) => c.reduce((a, b) => a + b, 0) / c.length;
+  const f = [...fill].sort((a, b) => mean(a.cover) - mean(b.cover)).slice(0, INK_MAX_FILL), top = Math.max(1e-6, ...f.map((g) => mean(g.cover)));
+  const e = edges.filter((g) => Math.max(...g.cover) > 0).slice(0, INK_MAX_EDGES);
+  const shapes = new Float32Array(e.length * INK_REGIONS);
+  e.forEach((g, i) => { const m = Math.max(...g.cover); g.cover.forEach((v, k) => (shapes[i * INK_REGIONS + k] = v / m)); });
+  return { fill: f.map((g) => g.slot), levels: Float32Array.from(f, (g) => mean(g.cover) / top), edges: e.map((g) => g.slot), shapes };
+}
+
+/** What a cell is read as: its regions' tone (0..1, the light they ask for) and the colour its character takes (sRGB 0..1). */
+export interface InkCell { tone: Float32Array; ink: Float32Array }
+export const inkCell = (): InkCell => ({ tone: new Float32Array(INK_REGIONS), ink: new Float32Array(3) });
+
+const W601 = [0.299, 0.587, 0.114] as const;
+
+/**
+ * Read one cell's `INK_SX x INK_SY` samples (RGBA 0..255, `stride` pixels a row, the cell's first at
+ * `x0, y0`) into `out`. Tone is brightness on a dark look, darkness on a light one, bent by `gamma` and
+ * rounded to `levels`. The character's colour is the mean, in linear light, of the samples on its side
+ * of the cell's mean: the bright ones on a dark look, the dark ones on a light look.
+ */
+export function readInkCell(px: ArrayLike<number>, stride: number, x0: number, y0: number, dark: boolean, out: InkCell): void {
+  let ym = 0;
+  const Y = READ_Y, q = INK_READ.levels - 1, T = dark ? TONE_DARK : TONE_LIGHT;
+  for (let v = 0; v < INK_SY; v++) for (let u = 0; u < INK_SX; u++) {
+    const p = ((y0 + v) * stride + x0 + u) * 4, k = v * INK_SX + u;
+    const r = LIN[px[p]!]!, g = LIN[px[p + 1]!]!, b = LIN[px[p + 2]!]!;
+    READ_R[k] = r; READ_G[k] = g; READ_B[k] = b;
+    ym += (Y[k] = W601[0] * r + W601[1] * g + W601[2] * b);
+  }
+  ym /= INK_SX * INK_SY;
+  let r = 0, g = 0, b = 0, c = 0;
+  for (let k = 0; k < INK_SX * INK_SY; k++) if (dark ? Y[k]! >= ym : Y[k]! <= ym) { r += READ_R[k]!; g += READ_G[k]!; b += READ_B[k]!; c++; }
+  out.ink[0] = fromLinear(r / c); out.ink[1] = fromLinear(g / c); out.ink[2] = fromLinear(b / c);
+  for (let ry = 0; ry < INK_RY; ry++) for (let rx = 0; rx < INK_RX; rx++) {
+    let y = 0;
+    for (let v = 0; v < INK_SPR; v++) for (let u = 0; u < INK_SPR; u++) y += Y[(ry * INK_SPR + v) * INK_SX + rx * INK_SPR + u]!;
+    out.tone[ry * INK_RX + rx] = T[Math.min(TONE_N - 1, ((y / (INK_SPR * INK_SPR)) * (TONE_N - 1) + 0.5) | 0)]! / q;
+  }
+}
+/** A region's rounded tone level from its linear brightness, read from a table (the GPU works it out: equal but within a table step). */
+const TONE_N = 4096;
+const toneTable = (dark: boolean) => Uint8Array.from({ length: TONE_N }, (_, i) => {
+  const l = fromLinear(i / (TONE_N - 1));
+  return Math.round(Math.pow(dark ? l : 1 - l, INK_READ.gamma) * (INK_READ.levels - 1));
+});
+const TONE_DARK = toneTable(true), TONE_LIGHT = toneTable(false);
+const READ_R = new Float32Array(INK_SX * INK_SY), READ_G = new Float32Array(INK_SX * INK_SY), READ_B = new Float32Array(INK_SX * INK_SY), READ_Y = new Float32Array(INK_SX * INK_SY);
+
+/** A cell's rounded tones as one number (the 2D path caches the pick on it). */
+export function inkKey(tone: ArrayLike<number>): number {
+  const q = INK_READ.levels - 1;
+  let key = 0;
+  for (let k = 0; k < INK_REGIONS; k++) key = key * INK_READ.levels + Math.round(tone[k]! * q);
+  return key;
+}
+
+/**
+ * Which character a cell read as `tone` takes: `[0]` none; `[1, edge index, strength]` an edge, its
+ * strength (0..1) as bright as the cell's brightest region; `[2, fill index, 1]` a fill as dense as the
+ * cell is bright on average.
+ */
+const PATTERN = new Float32Array(INK_REGIONS);
+export function inkPick(tone: ArrayLike<number>, g: InkGlyphs): [0] | [1 | 2, number, number] {
+  let mx = 0, mn = 1, mean = 0;
+  for (let k = 0; k < INK_REGIONS; k++) { const t = tone[k]!; mx = Math.max(mx, t); mn = Math.min(mn, t); mean += t; }
+  mean /= INK_REGIONS;
+  if (mx - mn >= INK_READ.edge && g.edges.length) {
+    const p = PATTERN;
+    for (let k = 0; k < INK_REGIONS; k++) p[k] = Math.pow(tone[k]! / mx, INK_READ.crunch);
+    let best = -1, bd: number = INK_READ.fit;
+    for (let e = 0; e < g.edges.length; e++) {
+      let d = 0;
+      for (let k = 0; k < INK_REGIONS; k++) { const t = p[k]! - g.shapes[e * INK_REGIONS + k]!; d += t * t; }
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (best >= 0) return [1, best, Math.sqrt(mx)];
+  }
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < g.levels.length; i++) { const d = Math.abs(g.levels[i]! - mean); if (d < bd) { bd = d; best = i; } }
+  return best === 0 ? [0] : [2, best, 1];
 }

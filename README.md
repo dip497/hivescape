@@ -49,13 +49,15 @@ still ones, as an ASCII shader over a still shot does.
 
 | Ejiri (Japan, about 1830), at full size | Lakshmi (India, 1883), at full size |
 |---|---|
-| ![Hokusai's gale at Ejiri in ink: the field's characters flicker in the wind round a traveller in an orange hat, who holds still](docs/images/film-ejiri.webp) | ![Lakshmi in ink: her gold crown in glowing characters over the dark picture, the halo breathing](docs/images/film-lakshmi.webp) |
+| ![Hokusai's gale at Ejiri in ink: the field's characters change in the wind round a traveller in an orange hat, who holds still](docs/images/film-ejiri.webp) | ![Lakshmi in ink: her gold crown and face drawn in edge characters against a calm field of light, the halo breathing](docs/images/film-lakshmi.webp) |
 
-Beneath the characters is the picture itself, dark. Each cell is read for its colour, its brightness
-and its texture: where the texture runs one way (grass, rain, the line of a roof) the cell takes a
-stroke along it, `- | \ /`; elsewhere a character as dense as the cell is bright, from ` .-:*+=%o#@` (ordered by how much of the cell each covers),
-and a dark cell none, so the picture shows through. The characters are the picture's colours,
-saturated, and glow; a seam under each row gives a screen's scan lines.
+The characters carry the picture's light. Each cell is read as nine regions (three across, three
+down). A cell with an edge in it takes the line or bracket whose shape, measured out of the font, is
+nearest its own: `_` for a bright lower edge, `[` for a bright left side, `/` for a diagonal. Any
+other cell takes an even character as dense as it is bright, from ` .:;+*xo#0` (ordered by how much
+of the cell each covers), so flat light stays calm, and a dark cell none. Each character is drawn in
+the colour of its cell's bright side, averaged in linear light (never the brown mean of both sides
+of an edge), lifted toward full brightness, on a dim ground of the picture, with a glow.
 
 | The whole of Lakshmi | Mountain Mist (China, 1898) | Lakshmi by day |
 |---|---|---|
@@ -153,7 +155,7 @@ in `/ \ _ |` and the bees are characters too.
   | `ascii` | Character cells, as a terminal draws them: a body is a block with a character cut into it, an edge the light character that sits where the shape does (`. , ' ( )`), a thin stroke a line character along it (`- \| / \`). |
   | `pixel` | Square cells, flat or in relief. |
   | `native` | The picture itself at full resolution, lit and glowing: plain 2D illustration. |
-  | `ink` | The whole frame in characters, as an ASCII shader over a picture draws: the picture beneath, dark, and over it glowing characters in its colours, strokes along its texture (`/` in grass, `\|` in rain). Made for paintings and photographs. |
+  | `ink` | The whole frame in characters that carry the picture's light: edges drawn by the line or bracket shaped like them, flat areas by even characters as dense as they are bright, each in its cell's bright colour, on a dim ground of the picture. Made for paintings and photographs. |
 
 - **Lit.** `light()` paints what glows. Each cell is shaded from the direction its light comes
   from, a cell inside strong light shines on its own, and the light glows over the ground.

@@ -6,11 +6,12 @@
  * it into relief and lights it: the key light from the upper left, the scene's own lights from the
  * side they shine from, and the pointer's torch from where it is. Before the cells, one full-screen
  * pass lets the scene's lights glow over the ground (or draws a native picture); after them, one
- * instanced draw places the overlay's characters and dots. Four draw calls at most, whatever the size.
+ * instanced draw places the overlay's characters and dots. Four draw calls at most, whatever the size
+ * (five for ink on a dark look, whose characters go through a framebuffer of their own for their glow).
  */
 import { ATLAS_COLS, ATLAS_ROWS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
-import { CUT, INK_PICK, INK_TEXTURE_GAIN } from "./ascii.js";
+import { CUT, INK_MAX_EDGES, INK_MAX_FILL, INK_READ, INK_REGIONS, INK_RX, INK_RY, INK_SPR, INK_SX, INK_SY } from "./ascii.js";
 import { INK, KEY, type FrameInput } from "./frame.js";
 import { LS, SS, type AnyCanvas } from "./surface.js";
 
@@ -98,6 +99,12 @@ uniform float uEdge[${EDGES}];
 uniform vec4 uLook;
 uniform float uSharp;
 uniform int uDark;
+uniform vec4 uInkFill[${INK_MAX_FILL / 4}];                  // ink: fill characters' atlas slots, least ink first
+uniform vec4 uInkLevel[${INK_MAX_FILL / 4}];                 // ink: each fill character's coverage against the densest
+uniform int uInkFillN;
+uniform vec4 uInkEdge[${INK_MAX_EDGES / 4}];                 // ink: edge characters' atlas slots
+uniform vec4 uShape[${(INK_MAX_EDGES * INK_REGIONS) / 4}];   // ink: each edge character's shape, INK_REGIONS numbers each
+uniform int uInkEdgeN;
 out vec2 vP;
 out vec2 vWorld;
 flat out vec2 vHalf;
@@ -156,40 +163,60 @@ void main() {
   float alpha = uKind == 2 && a < uTile.x ? a : 1.0;
   vec2 offset = vec2(0.0);
   if (uKind == 4) {
-    // ink (ascii.ts's inkTexture and inkGlyph): the cell's texture from its samples' brightness, and
-    // its character: a stroke along strong one-way texture, else one as dense as the cell is bright
-    // (dark, on a light page), or none.
-    float Lu[${SS * SS}];
-    vec3 sum = vec3(0.0);
-    ivec2 b0 = ivec2(i, j) * ${SS};
-    for (int v = 0; v < ${SS}; v++) for (int u = 0; u < ${SS}; u++) {
-      vec4 t = texelFetch(uPic, b0 + ivec2(u, v), 0);
-      Lu[v * ${SS} + u] = dot(t.rgb, vec3(0.299, 0.587, 0.114));
-      sum += t.rgb;
+    // ink (ascii.ts's readInkCell): the cell's samples in linear light, and the character's colour, its
+    // bright side's (its dark side's, on a light page)
+    vec3 lin[${INK_SX * INK_SY}];
+    float Y[${INK_SX * INK_SY}];
+    float ym = 0.0;
+    ivec2 b0 = ivec2(i * ${INK_SX}, j * ${INK_SY});
+    for (int v = 0; v < ${INK_SY}; v++) for (int u = 0; u < ${INK_SX}; u++) {
+      vec3 t = texelFetch(uPic, b0 + ivec2(u, v), 0).rgb;
+      int k = v * ${INK_SX} + u;
+      lin[k] = t * t;
+      Y[k] = dot(lin[k], vec3(0.299, 0.587, 0.114));
+      ym += Y[k];
     }
-    c = sum / ${SS * SS}.0;
-    float kx = ${2 * SS}.0 / uCell.x, ky = ${2 * SS}.0 / uCell.y, jxx = 0.0, jyy = 0.0, jxy = 0.0;
-    for (int v = 0; v < ${SS - 1}; v++) for (int u = 0; u < ${SS - 1}; u++) {
-      float a0 = Lu[v * ${SS} + u], a1 = Lu[v * ${SS} + u + 1], a2 = Lu[(v + 1) * ${SS} + u], a3 = Lu[(v + 1) * ${SS} + u + 1];
-      float dx = (a1 - a0 + a3 - a2) * 0.5 * kx, dy = (a2 - a0 + a3 - a1) * 0.5 * ky;
-      jxx += dx * dx; jyy += dy * dy; jxy += dx * dy;
+    ym /= ${INK_SX * INK_SY}.0;
+    vec3 side = vec3(0.0);
+    float ns = 0.0;
+    for (int k = 0; k < ${INK_SX * INK_SY}; k++) if (uDark == 1 ? Y[k] >= ym : Y[k] <= ym) { side += lin[k]; ns += 1.0; }
+    c = sqrt(side / ns);
+    // Tone per region: brightness (darkness, on a light page), bent and rounded; then (ascii.ts's
+    // inkPick) an edge character by shape where the cell has contrast inside it, else a fill by density.
+    float tone[${INK_REGIONS}];
+    float mx = 0.0, mn = 1.0, mean = 0.0;
+    const float QL = ${(INK_READ.levels - 1).toFixed(1)};
+    for (int ry = 0; ry < ${INK_RY}; ry++) for (int rx = 0; rx < ${INK_RX}; rx++) {
+      float y = 0.0;
+      for (int v = 0; v < ${INK_SPR}; v++) for (int u = 0; u < ${INK_SPR}; u++) y += Y[(ry * ${INK_SPR} + v) * ${INK_SX} + rx * ${INK_SPR} + u];
+      float l = sqrt(y / ${INK_SPR * INK_SPR}.0);
+      float tn = floor(pow(uDark == 1 ? l : 1.0 - l, ${INK_READ.gamma.toFixed(4)}) * QL + 0.5) / QL;
+      tone[ry * ${INK_RX} + rx] = tn;
+      mx = max(mx, tn); mn = min(mn, tn); mean += tn;
     }
-    jxx /= ${(SS - 1) * (SS - 1)}.0; jyy /= ${(SS - 1) * (SS - 1)}.0; jxy /= ${(SS - 1) * (SS - 1)}.0;
-    float e = jxx + jyy, tex = min(1.0, sqrt(e) * ${INK_TEXTURE_GAIN}.0);
-    float coh = e > 1e-9 ? sqrt((jxx - jyy) * (jxx - jyy) + 4.0 * jxy * jxy) / e : 0.0;
-    float lm = dot(c, vec3(0.299, 0.587, 0.114)), tone = uDark == 1 ? lm : 1.0 - lm;
-    if (tone < ${INK_PICK.none}) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
-    if (tex > ${INK_PICK.tex} && coh > ${INK_PICK.coh}) {
-      float m = mod(0.5 * atan(2.0 * jxy, jxx - jyy) + PI * 0.5, PI);
-      int k = m < PI / 8.0 || m > 7.0 * PI / 8.0 ? 0 : (m > 3.0 * PI / 8.0 && m < 5.0 * PI / 8.0 ? 1 : (m < PI / 2.0 ? 2 : 3));
-      vSlot = uEdge[k];
-      vBody = 0.55 + 0.45 * tone;
-    } else {
-      float q = min(1.0, tone * (0.85 + 0.25 * tex));
-      int k = int(min(uRampLen - 1.0, floor(q * uRampLen)));
-      if (k <= 0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
-      vSlot = uRamp[k];
-      vBody = 0.4 + 0.6 * q;
+    mean /= ${INK_REGIONS}.0;
+    int best = -1;
+    if (mx - mn >= ${INK_READ.edge.toFixed(4)} && uInkEdgeN > 0) {
+      float bd = ${INK_READ.fit.toFixed(4)};
+      for (int e = 0; e < ${INK_MAX_EDGES}; e++) {
+        if (e >= uInkEdgeN) break;
+        float d = 0.0;
+        for (int k = 0; k < ${INK_REGIONS}; k++) { int q = e * ${INK_REGIONS} + k; float t = pow(tone[k] / mx, ${INK_READ.crunch.toFixed(4)}) - uShape[q / 4][q % 4]; d += t * t; }
+        if (d < bd) { bd = d; best = e; }
+      }
+    }
+    if (best >= 0) { vSlot = uInkEdge[best / 4][best % 4]; vBody = sqrt(mx); }
+    else {
+      int f = 0;
+      float bd = 1e9;
+      for (int i = 0; i < ${INK_MAX_FILL}; i++) {
+        if (i >= uInkFillN) break;
+        float d = abs(uInkLevel[i / 4][i % 4] - mean);
+        if (d < bd) { bd = d; f = i; }
+      }
+      if (f == 0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+      vSlot = uInkFill[f / 4][f % 4];
+      vBody = 1.0;
     }
     half_ = uCell * 0.5;
     height = 0.0;
@@ -286,26 +313,29 @@ float sd(vec2 p) {
   float k = min(uTile.w, min(vHalf.x, vHalf.y) * 0.5);
   return uHex == 1 ? sdHex(p, vHalf.x, k) : sdBox(p, vHalf, k);
 }
+// frame.ts's inkColour.
+vec3 inkTint(vec3 c) {
+  float l = lum(c), k = ${INK.chroma.toFixed(4)};
+  for (int i = 0; i < 3; i++) {
+    if (c[i] > l + 1e-6) k = min(k, (1.0 - l) / (c[i] - l));
+    else if (c[i] < l - 1e-6) k = min(k, l / (l - c[i]));
+  }
+  c = vec3(l) + (c - vec3(l)) * k;
+  if (uDark == 0) return c * ${INK.deep.toFixed(4)};
+  float m = max(c.r, max(c.g, c.b));
+  return m > 1e-4 ? min(c * ((1.0 / m) * ${INK.lift.toFixed(4)} + ${(1 - INK.lift).toFixed(4)}), vec3(1.0)) : c;
+}
 void main() {
   if (uKind == 4) {
-    // ink (frame.ts's inkColour): the character in its cell's colour, lit, saturated, brightened by its
-    // strength and glowing on a dark look (added on: the picture is beneath); deepened on a light one.
-    vec3 col = shade(vFill, vec3(0.0, 0.0, 1.0), vWorld, 0.0);
-    col = mix(col, vFill * 1.15 + lightAt(vWorld, 0.0) * 0.3, vEmit);
-    col = clamp(vec3(lum(col)) + (col - vec3(lum(col))) * ${INK.sat.toFixed(2)}, 0.0, 1.0);
-    float s = vBody;
+    // ink (frame.ts's inkColour): the character in its side's colour, chroma pushed out within gamut,
+    // lifted toward full brightness on a dark look (deepened on a light one), then lit; drawn over.
+    vec3 base = inkTint(vFill);
+    vec3 col = shade(base, vec3(0.0, 0.0, 1.0), vWorld, 0.0);
+    col = mix(col, base * 1.15 + lightAt(vWorld, 0.0) * 0.3, vEmit);
     vec2 slot = vec2(mod(vSlot, ${ATLAS_COLS}.0), floor(vSlot / ${ATLAS_COLS}.0));
-    vec2 uv = (slot + clamp(vP / uCell + 0.5, 0.0, 1.0)) / vec2(${ATLAS_COLS}.0, ${ATLAS_ROWS}.0);
-    float g = texture(uAtlas, uv).a * s;
-    float seam = vP.y > uCell.y * 0.5 - 1.0 ? (uDark == 1 ? ${INK.seam.dark} : ${INK.seam.light}) : 1.0;
-    if (uDark == 1) {
-      vec3 ink = min(col * (0.8 + s) + 0.05 * s, 1.0);
-      float halo = textureLod(uAtlas, uv, 2.5).a * s;
-      o = vec4(ink * (g + halo * ${INK.glow} * 0.6) * seam, 0.0);
-    } else {
-      vec3 ink = col * (0.55 - 0.15 * s);
-      o = vec4(ink * g * seam, g);
-    }
+    float g = texture(uAtlas, (slot + clamp(vP / uCell + 0.5, 0.0, 1.0)) / vec2(${ATLAS_COLS}.0, ${ATLAS_ROWS}.0)).a;
+    if (g < 0.002) discard;
+    o = vec4(min(col * vBody, vec3(1.0)) * g, g);
     return;
   }
   if (uKind == 1) {
@@ -387,11 +417,9 @@ void main() {
   }
   vec4 col = vec4(glow, 0.0);
   if (uInk == 1) {
-    // ink: the picture beneath its characters, darkened (washed toward the page, on a light look), with
-    // a seam under each row of cells as a screen's scan lines.
+    // ink: the ground beneath its characters, the picture dim (washed toward the page, on a light look).
     vec3 p = texture(uPic, vWorld / uSpan).rgb;
     vec3 base = uDark == 1 ? p * ${INK.base.dark} : mix(p, uPage, ${INK.base.light});
-    if (mod(vWorld.y, uCell.y) > uCell.y - 1.0) base *= uDark == 1 ? ${INK.seam.dark} : ${INK.seam.light};
     o = vec4(base + glow, 1.0);
     return;
   }
@@ -404,6 +432,21 @@ void main() {
   }
   if (col.r + col.g + col.b + col.a < 0.002) discard;
   o = col;
+}`;
+
+/** ink on a dark look: its characters, drawn apart, laid over the ground with their glow (two levels of their own mip chain). */
+const INK_FS = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D uInk;
+uniform vec2 uView;
+uniform float uGlowLod;  // the level a quarter of a CSS pixel's resolution sits at: 2 + log2(dpr)
+in vec2 vWorld;
+out vec4 o;
+void main() {
+  vec2 uv = vec2(vWorld.x / uView.x, 1.0 - vWorld.y / uView.y);
+  vec4 t = textureLod(uInk, uv, 0.0);
+  vec3 glow = textureLod(uInk, uv, uGlowLod).rgb * ${INK.glow[0].toFixed(4)} + textureLod(uInk, uv, uGlowLod + 1.0).rgb * ${INK.glow[1].toFixed(4)};
+  o = vec4(t.rgb + glow, t.a);
 }`;
 
 const OVERLAY_VS = /* glsl */ `#version 300 es
@@ -480,7 +523,7 @@ function program(gl: WebGL2RenderingContext, vs: string, fs: string): Program {
   return { p, u };
 }
 
-const PROGRAMS = [[CELLS_VS, CELLS_FS], [SCREEN_VS, SCREEN_FS], [OVERLAY_VS, OVERLAY_FS]] as const;
+const PROGRAMS = [[CELLS_VS, CELLS_FS], [SCREEN_VS, SCREEN_FS], [OVERLAY_VS, OVERLAY_FS], [SCREEN_VS, INK_FS]] as const;
 
 const SOFTWARE = /swiftshader|llvmpipe|softpipe|software|microsoft basic render/i;
 
@@ -509,6 +552,15 @@ export class GLBackend implements Backend {
   private cells!: Program;
   private screen!: Program;
   private over!: Program;
+  private inkComp!: Program;
+  /** ink on a dark look: its characters are drawn into this first, so their glow can spread past their cells. */
+  private inkFbo: WebGLFramebuffer | null = null;
+  private inkTex: WebGLTexture | null = null;
+  private inkSize = { w: 0, h: 0 };
+  private inkFill = new Float32Array(INK_MAX_FILL);
+  private inkLevel = new Float32Array(INK_MAX_FILL);
+  private inkEdge = new Float32Array(INK_MAX_EDGES);
+  private inkShape = new Float32Array(INK_MAX_EDGES * INK_REGIONS);
   private picTex!: WebGLTexture;
   private lightTex!: WebGLTexture;
   private atlasTex!: WebGLTexture;
@@ -542,7 +594,8 @@ export class GLBackend implements Backend {
 
   private init(): void {
     const gl = this.gl;
-    [this.cells, this.screen, this.over] = PROGRAMS.map(([vs, fs]) => program(gl, vs, fs)) as [Program, Program, Program];
+    [this.cells, this.screen, this.over, this.inkComp] = PROGRAMS.map(([vs, fs]) => program(gl, vs, fs)) as [Program, Program, Program, Program];
+    this.inkFbo = null; this.inkTex = null; this.inkSize = { w: 0, h: 0 };
     const tex = (min: number, mag: number) => {
       const t = gl.createTexture()!;
       gl.bindTexture(gl.TEXTURE_2D, t);
@@ -554,7 +607,6 @@ export class GLBackend implements Backend {
     };
     this.picTex = tex(gl.LINEAR_MIPMAP_NEAREST, gl.LINEAR);
     this.lightTex = tex(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
-    // Mipmapped: ink's glow reads a character's blurred levels.
     this.atlasTex = tex(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     this.overVao = gl.createVertexArray()!;
     this.overBuf = gl.createBuffer()!;
@@ -602,6 +654,32 @@ export class GLBackend implements Backend {
     gl.uniform4f(u.uLook!, style.ambient, style.gloss, style.torch, style.glow);
     gl.uniform3f(u.uPointer!, f.pointer.x, f.pointer.y, f.pointer.active ? 1 : 0);
     gl.uniform2f(u.uView!, this.w, this.h);
+  }
+
+  /** The framebuffer ink's characters are drawn into on a dark look, the canvas's size, mipmapped for the glow. */
+  private inkTarget(): WebGLFramebuffer {
+    const gl = this.gl, w = this.canvas.width, h = this.canvas.height;
+    // Unit 3 is ink's own: binding its texture on whichever unit was active would unbind the atlas there.
+    gl.activeTexture(gl.TEXTURE3);
+    if (!this.inkFbo || !this.inkTex) {
+      this.inkTex = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, this.inkTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      this.inkFbo = gl.createFramebuffer()!;
+      this.inkSize = { w: 0, h: 0 };
+    }
+    if (this.inkSize.w !== w || this.inkSize.h !== h) {
+      gl.bindTexture(gl.TEXTURE_2D, this.inkTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.inkFbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.inkTex, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.inkSize = { w, h };
+    }
+    return this.inkFbo;
   }
 
   draw(f: FrameInput, atlas: Atlas): void {
@@ -673,10 +751,43 @@ export class GLBackend implements Backend {
       gl.uniform1fv(u.uEdge!, this.edges);
       gl.uniform1i(u.uDark!, f.look.dark ? 1 : 0);
       gl.uniform1f(u.uSharp!, style.edge);
+      const glow = ink && f.look.dark;
+      if (ink) {
+        const g = f.ink!, nf = Math.min(INK_MAX_FILL, g.fill.length), ne = Math.min(INK_MAX_EDGES, g.edges.length);
+        this.inkFill.fill(0); this.inkLevel.fill(0); this.inkEdge.fill(0); this.inkShape.fill(0);
+        for (let k = 0; k < nf; k++) { this.inkFill[k] = g.fill[k]!; this.inkLevel[k] = g.levels[k]!; }
+        for (let k = 0; k < ne; k++) this.inkEdge[k] = g.edges[k]!;
+        this.inkShape.set(g.shapes.subarray(0, ne * INK_REGIONS));
+        gl.uniform4fv(u.uInkFill!, this.inkFill);
+        gl.uniform4fv(u.uInkLevel!, this.inkLevel);
+        gl.uniform1i(u.uInkFillN!, nf);
+        gl.uniform4fv(u.uInkEdge!, this.inkEdge);
+        gl.uniform4fv(u.uShape!, this.inkShape);
+        gl.uniform1i(u.uInkEdgeN!, ne);
+        if (glow) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, this.inkTarget());
+          gl.clearColor(0, 0, 0, 0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+      }
       const count = grid.cols * grid.rows;
       if (sh && style.relief > 0 && style.kind !== "ascii") { gl.uniform1i(u.uPass!, 0); gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count); }
       gl.uniform1i(u.uPass!, 1);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, count);
+      if (glow) {
+        // The characters, then their glow from two levels of their own mip chain, over the ground.
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, this.inkTex);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        const c = this.inkComp;
+        gl.useProgram(c.p);
+        gl.uniform1i(c.u.uInk!, 3);
+        gl.uniform2f(c.u.uView!, this.w, this.h);
+        // The glow spreads as far in CSS pixels as the 2D path's (a quarter and an eighth of the CSS size), whatever the pixel ratio.
+        gl.uniform1f(c.u.uGlowLod!, 2 + Math.log2(Math.max(1, this.dpr)));
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
     }
 
     // The overlay: exact characters and dots where the scene put them.
@@ -706,10 +817,11 @@ export class GLBackend implements Backend {
 
   destroy(): void {
     const gl = this.gl;
-    for (const t of [this.picTex, this.lightTex, this.atlasTex]) gl.deleteTexture(t);
+    for (const t of [this.picTex, this.lightTex, this.atlasTex, this.inkTex]) if (t) gl.deleteTexture(t);
+    if (this.inkFbo) gl.deleteFramebuffer(this.inkFbo);
     gl.deleteBuffer(this.overBuf);
     gl.deleteVertexArray(this.overVao);
-    for (const pr of [this.cells, this.screen, this.over]) gl.deleteProgram(pr.p);
+    for (const pr of [this.cells, this.screen, this.over, this.inkComp]) gl.deleteProgram(pr.p);
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 }

@@ -23,6 +23,8 @@ A screen has two device pixels a CSS pixel, and character styles (`ascii`, `ink`
 one: shoot and film those with `--dpr 2` before you judge them or show them to anyone. For `ink`,
 also put a full-size crop beside the look you are aiming at (the reference, at the same zoom), and
 look at the whole frame small: if its light and dark do not read, the characters do not matter.
+Crop from the `-still.png` that `film` writes (its last frame, as drawn): an MP4's compression
+smears characters, and a software GPU's first frames can lag, so a `shot` of WebGL may be black.
 
 `shot` writes four moments in each look (running, the pointer resting, a click, after) and a
 contact sheet. Look at the sheet first, then crop to full size where the detail is (a creature, the
