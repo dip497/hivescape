@@ -109,7 +109,7 @@ export default defineScene<Pond>({
   name: "Koi Pond",
   description: "Koi drift through a lily pond, gather under a resting pointer, and race for the food a click drops. By night, floating lanterns light them.",
   style: (look) => ({
-    kind: "comb", cell: [15, 0], relief: 0.8, gloss: 0.75,
+    kind: "comb", cell: [10, 0], gap: 1, relief: 0.8, gloss: 0.75,
     shadow: look.dark ? LOOKS.dark.shadow : LOOKS.light.shadow, shadowAlpha: look.dark ? 0.55 : 0.22,
     ambient: look.dark ? 0.62 : 1, glow: look.dark ? 0.55 : 0.25, key: look.dark ? [200, 225, 255] : [255, 250, 235],
   }),

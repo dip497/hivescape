@@ -69,7 +69,7 @@ export default defineScene<Camp>({
   name: "Campfire",
   description: "A campfire in a clearing under the moon, lighting the firs around it: flames lean to the pointer, and a click throws a log on.",
   style: (look) => ({
-    kind: "comb", cell: [13, 0], relief: 0.7, gloss: 0.5,
+    kind: "comb", cell: [10, 0], gap: 1, relief: 0.7, gloss: 0.5,
     shadow: look.dark ? [0, 0, 0] : [50, 30, 70], shadowAlpha: look.dark ? 0.6 : 0.22,
     ambient: look.dark ? 0.42 : 0.9, glow: look.dark ? 0.7 : 0.3, key: look.dark ? [170, 190, 255] : [255, 236, 220],
   }),

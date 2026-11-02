@@ -149,7 +149,7 @@ export default defineScene<Hive>({
   name: "The Hive",
   description: "A honeycomb where each agent is a bee: honey fills its cells as turns finish, and a bee whose agent needs you dances beside its tile.",
   style: (look) => ({
-    kind: "comb", cell: [17, 0], relief: 0.85, gloss: 0.8, gap: 1.6, radius: 2,
+    kind: "comb", cell: [12, 0], relief: 0.85, gloss: 0.8, gap: 1, radius: 1.5,
     shadow: look.dark ? [6, 3, 0] : [90, 60, 20], shadowAlpha: look.dark ? 0.6 : 0.24,
     ambient: look.dark ? 0.55 : 1, glow: look.dark ? 0.6 : 0.22, key: look.dark ? [255, 220, 170] : [255, 248, 232],
   }),

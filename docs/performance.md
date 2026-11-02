@@ -20,24 +20,29 @@ quoting one.
 
 ## Campfire at 1440 × 900
 
-Measured 2026-10-30 in a container with no GPU. WebGL is SwiftShader; Canvas2D is Skia on the CPU.
+Measured 2026-11-02 in a container with no GPU. WebGL is SwiftShader; Canvas2D is Skia on the CPU.
+Its comb is finer than it was (10 px cells with a 1 px gap, from 13 px and 2): 15,225 cells, from
+9,072. The same container ran the styles that did not change (ascii, native) 15 to 80% slower than
+on 2026-10-30, so compare one row with another of the same run, not with older numbers.
 
 | Backend | Style | Pixel ratio | Cells | Script per frame (median / p90) |
 |---|---|---|---|---|
-| webgl2 | comb | 1 | 9072 | 2.5 / 4.2 ms |
-| webgl2 | comb | 2 | 9072 | 2.4 / 3.6 ms |
-| webgl2 | ascii | 1 | 11200 | 3.9 / 4.6 ms |
-| webgl2 | ascii | 2 | 11200 | 3.8 / 4.2 ms |
-| webgl2 | pixel | 1 | 20340 | 4.0 / 6.5 ms |
-| webgl2 | native | 1 | — | 9.3 / 16.9 ms |
-| webgl2 | native | 2 | — | 30.9 / 37.3 ms |
-| canvas2d | comb | 1 | 9072 | 11.2 / 14.3 ms |
-| canvas2d | comb | 2 | 9072 | 11.3 / 13.9 ms |
-| canvas2d | ascii | 1 | 11200 | 15.5 / 17.3 ms |
-| canvas2d | ascii | 2 | 11200 | 15.1 / 17.7 ms |
-| canvas2d | pixel | 1 | 20340 | 12.9 / 13.8 ms |
-| canvas2d | native | 1 | — | 4.3 / 5.8 ms |
-| canvas2d | native | 2 | — | 9.0 / 11.2 ms |
+| webgl2 | comb | 1 | 15225 | 5.7 / 13.5 ms |
+| webgl2 | comb | 2 | 15225 | 5.4 / 8.1 ms |
+| webgl2 | ascii | 1 | 11200 | 4.5 / 6.7 ms |
+| webgl2 | ascii | 2 | 11200 | 5.2 / 7.1 ms |
+| webgl2 | pixel | 1 | 20340 | 7.4 / 10.8 ms |
+| webgl2 | native | 1 | — | 17.0 / 19.6 ms |
+| webgl2 | native | 2 | — | 45.8 / 51.4 ms |
+| webgl2 | ink | 1 | 13500 | 4.5 / 6.7 ms |
+| canvas2d | comb | 1 | 15225 | 14.3 / 16.8 ms |
+| canvas2d | comb | 2 | 15225 | 15.4 / 18.6 ms |
+| canvas2d | ascii | 1 | 11200 | 17.2 / 21.2 ms |
+| canvas2d | ascii | 2 | 11200 | 16.8 / 20.6 ms |
+| canvas2d | pixel | 1 | 20340 | 15.5 / 19.9 ms |
+| canvas2d | native | 1 | — | 9.1 / 11.2 ms |
+| canvas2d | native | 2 | — | 21.0 / 28.6 ms |
+| canvas2d | ink | 1 | 13500 | 11.1 / 14.8 ms |
 
 The Hive, with its bees on the full-resolution front layer, at the same size and on the same
 machine: comb 4.2 ms on WebGL and 11.1 ms on Canvas2D at ratio 1 (4.7 and 11.7 at 2); ascii
