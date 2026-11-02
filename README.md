@@ -49,9 +49,9 @@ flows, grass and leaves bend in the wind, rain falls, mist drifts, a halo breath
 contrast is what makes the moving parts read: a moving region flips its characters in place against
 still ones, as an ASCII shader over a still shot does.
 
-| Ejiri (Japan, about 1830), at full size | Lakshmi (India, 1883), at full size |
-|---|---|
-| ![Hokusai's gale at Ejiri in ink: the field's characters change in the wind round a traveller in an orange hat, who holds still](docs/images/film-ejiri.webp) | ![Lakshmi in ink: her gold crown and face drawn in edge characters against a calm field of light, the halo breathing](docs/images/film-lakshmi.webp) |
+| Ejiri (Japan, about 1830), at full size |
+|---|
+| ![Hokusai's gale at Ejiri in ink: the field's characters change in the wind round a traveller in an orange hat, who holds still](docs/images/film-ejiri.webp) |
 
 The characters carry the picture's light. Each cell is read as nine regions (three across, three
 down). A cell with an edge in it takes the line or bracket whose shape, measured out of the font, is
@@ -66,9 +66,9 @@ own blades, laid along the print's grain and bending away from the gale in gusts
 Aurora's curtains are their rays, drifting along the arc. Up close a stroke is just a stroke; arranged
 along the picture's grain, the eye reads grass.
 
-| The whole of Lakshmi | Mountain Mist (China, 1898) | Lakshmi by day |
-|---|---|---|
-| ![Lakshmi in ink: the goddess crowned, her red robe and gold, the wheat and the tree behind her](docs/images/painting-lakshmi.webp) | ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) | ![Lakshmi in ink on a light look, like a print](docs/images/painting-lakshmi-light.webp) |
+| Mountain Mist (China, 1898) |
+|---|
+| ![Song Nian's ink landscape in characters: cliffs, far peaks in mist, a pine grove](docs/images/painting-mountain-mist.webp) |
 
 A picture is a scene in a few lines: what moves, and nothing else.
 
@@ -111,7 +111,6 @@ collection, public domain and released under CC0; the aurora is NASA's:
 | Aurora | The aurora australis from the International Space Station, Expedition 65 crew, 2021 (NASA, iss065e214281; not protected by copyright) |
 | Ejiri | Katsushika Hokusai, *Ejiri in Suruga Province*, from *Thirty-six Views of Mount Fuji*, about 1830-32 (JP12) |
 | Gèdres | Joseph Vigier, *Village de Gèdres, Route de Gavarnie*, 1853, salted paper print (2005.100.503.10) |
-| Lakshmi | *Lakshmi*, Calcutta Art Studio, Kolkata, 1883 (2021.202) |
 | Sudden Shower | Utagawa Hiroshige, *Sudden Shower over Shin-Ōhashi Bridge and Atake*, 1857 (JP2522) |
 | Mountain Mist | Song Nian, *Landscape* (a section), 1898 (1986.267.76) |
 | The Harvest | Pieter Bruegel the Elder, *The Harvesters*, 1565 (19.164) |
@@ -275,6 +274,6 @@ What it costs is in [docs/performance.md](docs/performance.md).
 ## Licence
 
 MIT. The bundled JetBrains Mono (used for the ascii and ink styles) is under the SIL Open Font
-License; see `packages/render/fonts/OFL.txt`. The pictures in `scenes/ejiri`, `scenes/gedres`, `scenes/lakshmi`,
+License; see `packages/render/fonts/OFL.txt`. The pictures in `scenes/ejiri`, `scenes/gedres`,
 `scenes/sudden-shower`, `scenes/mountain-mist` and `scenes/harvest` are public domain (The Met, CC0), and `scenes/aurora`'s is NASA's (not protected by copyright);
 each scene's `package.json` credits its own.
