@@ -49,7 +49,7 @@ flows, grass and leaves bend in the wind, rain falls, mist drifts, a halo breath
 contrast is what makes the moving parts read: a moving region flips its characters in place against
 still ones, as an ASCII shader over a still shot does.
 
-| Ejiri (Japan, about 1830), at full size |
+| Ejiri (Japan, about 1830) |
 |---|
 | ![Hokusai's gale at Ejiri in ink: the field's characters change in the wind round a traveller in an orange hat, who holds still](docs/images/film-ejiri.webp) |
 
