@@ -92,8 +92,12 @@ its tuning for its own kind.
     `_ - | / \ ( ) [ ] ^ ' " , . < > ~`) whose shape, measured out of the atlas and taken against
     its own most covered region, is nearest the cell's (each region against the brightest, sharpened),
     as bright as the cell's brightest region;
-  - any other cell is a fill: the style's ramp (` .:;+*xo#0`), sorted by each character's measured
-    coverage, gives the character as dense as the cell is bright on average; the blank draws nothing;
+  - any other cell is a fill: the style's ramp (` .:;+*%#@`), sorted by each character's measured
+    coverage, gives the character as dense as the cell is bright on average, mixing the two either
+    side of it by a 4 x 4 ordered dither fixed to the cells (`inkDither`), so a flat stretch is a fine
+    even texture and not one character in every cell, which read as rows of text; the blank draws
+    nothing. A painting's cell is 7 x 10 px and its characters 1.15 of its height, so one row's
+    characters nearly meet the next's: at 7 x 13 the gaps between rows showed as lines;
   - the character's colour is the mean, in linear light, of the cell's samples on its bright side
     (dark side, on a light look), its chroma pushed out as far as it stays in gamut, and lifted
     toward its full brightness on a dark look (deepened on a light one), so a dark cell is dark

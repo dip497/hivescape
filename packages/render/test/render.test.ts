@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { averageCells, cellShapes } from "../src/kernel.ts";
-import { ASCII_EDGES, bodyGlyph, edgeGlyph, INK_SX, INK_SY, inkCell, inkGlyphs, inkPick, measureShape, readInkCell } from "../src/ascii.ts";
+import { ASCII_EDGES, bodyGlyph, edgeGlyph, INK_SX, INK_SY, inkCell, inkDither, inkGlyphs, inkPick, measureShape, readInkCell } from "../src/ascii.ts";
 import { cellSize, inkColour, inkStrokeAlpha } from "../src/frame.ts";
 import { gridFor } from "../src/surface.ts";
 import { resolveStyle, DARK } from "@hivescape/core";
@@ -113,6 +113,20 @@ describe("ink", () => {
     // Fills by their measured coverage: slot 3 (0.1) < slot 2 (0.3) < slot 1 (0.6).
     expect([at(110), at(170), at(255)]).toEqual(["fill 3", "fill 2", "fill 1"]);
   });
+  test("a flat stretch between two fills mixes them, dithered, as much of each as its tone lies between them, and not one character in every cell", () => {
+    // A tone 0.4 of the way from the 0.3 fill to the 0.6 one (as a share of the densest): over any 4 x 4
+    // block of cells about 40% take the denser fill and the rest the sparser, never a third.
+    const lo = set.levels[2]!, hi = set.levels[3]!, tone = new Float32Array(9).fill(lo + (hi - lo) * 0.4);
+    const counts = new Map<number, number>();
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) {
+      const p = inkPick(tone, set, inkDither(i, j));
+      counts.set(p[0] === 2 ? p[1] : -1, (counts.get(p[0] === 2 ? p[1] : -1) ?? 0) + 1);
+    }
+    expect(Object.fromEntries(counts)).toEqual({ 2: 10, 3: 6 });
+    // A block a step along takes the same pattern: it is fixed to the cells, so it never shimmers.
+    expect(inkDither(1, 2)).toBe(inkDither(5, 6));
+  });
+
   test("the fill is ordered by measured coverage, whatever order it is given in, the densest at level 1", () => {
     expect(set.fill).toEqual([0, 3, 2, 1]);
     expect(set.levels[0]).toBe(0);

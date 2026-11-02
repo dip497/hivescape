@@ -24,7 +24,7 @@ picture doesn't have, no moving camera, nothing that slides.
   `primaryImage`. Take the title, maker, date, medium and accession number from the record, never
   from memory, into `package.json` as `hivescape.credit`.
 - **Choose well**: wide, with large shapes, and a large part of it that moves in life (a river or
-  falls, a field, trees, rain): a picture where only a corner moves makes a weak wallpaper. A cell is 7 x 13 px: a face needs about 12 cells across. A small old scan comes out
+  falls, a field, trees, rain): a picture where only a corner moves makes a weak wallpaper. A cell is 7 x 10 px: a face needs about 12 cells across. A small old scan comes out
   as blocks: find another. Leave out a work whose subject is unwelcome behind someone's work.
 - **Sacred images with respect**: whole, upright and still, nothing comic; at most a light that
   breathes (a halo).

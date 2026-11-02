@@ -11,7 +11,7 @@
  */
 import { ATLAS_COLS, ATLAS_ROWS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
-import { CUT, INK_MAX_EDGES, INK_MAX_FILL, INK_READ, INK_REGIONS, INK_RX, INK_RY, INK_SPR, INK_SX, INK_SY } from "./ascii.js";
+import { BAYER4_LIST, CUT, INK_MAX_EDGES, INK_MAX_FILL, INK_READ, INK_REGIONS, INK_RX, INK_RY, INK_SPR, INK_SX, INK_SY } from "./ascii.js";
 import { INK, KEY, type FrameInput } from "./frame.js";
 import { LS, SS, type AnyCanvas } from "./surface.js";
 
@@ -207,12 +207,18 @@ void main() {
     }
     if (best >= 0) { vSlot = uInkEdge[best / 4][best % 4]; vBody = sqrt(mx); }
     else {
+      // The densest fill at or below the cell's tone, or the next where the tone is past the cell's
+      // dither threshold of the way to it (ascii.ts's inkPick with inkDither).
+      const int BAYER[16] = int[16](${BAYER4_LIST.join(", ")});
+      float dither = (float(BAYER[(j & 3) * 4 + (i & 3)]) + 0.5) / 16.0;
       int f = 0;
-      float bd = 1e9;
-      for (int i = 0; i < ${INK_MAX_FILL}; i++) {
-        if (i >= uInkFillN) break;
-        float d = abs(uInkLevel[i / 4][i % 4] - mean);
-        if (d < bd) { bd = d; f = i; }
+      for (int n = 0; n < ${INK_MAX_FILL}; n++) {
+        if (n >= uInkFillN) break;
+        if (uInkLevel[n / 4][n % 4] <= mean) f = n;
+      }
+      if (f + 1 < uInkFillN) {
+        float lo = uInkLevel[f / 4][f % 4], hi = uInkLevel[(f + 1) / 4][(f + 1) % 4];
+        if ((mean - lo) / (hi - lo) > dither) f += 1;
       }
       if (f == 0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
       vSlot = uInkFill[f / 4][f % 4];

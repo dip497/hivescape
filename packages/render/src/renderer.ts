@@ -123,7 +123,7 @@ export class Renderer {
       if (c.height !== bh) c.height = bh;
     }
     this.backend.resize(size.w, size.h, size.dpr);
-    this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "ascii" ? 0.82 : style.kind === "ink" ? 0.95 : 0.6);
+    this.atlas.configure(this.grid.cw, this.grid.ch, size.dpr, style.kind === "ascii" ? 0.82 : style.kind === "ink" ? 1.15 : 0.6);
     this.ramp = this.atlas.slots(style.ramp || " ");
     this.edges = this.atlas.slots(style.kind === "ink" ? INK_EDGES : ASCII_EDGES);
     this.inkAt = -1;

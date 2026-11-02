@@ -15,7 +15,7 @@ import { clamp, smoothstep } from "@hivescape/core";
 import { ATLAS_COLS, ATLAS_ROWS, type Atlas } from "./atlas.js";
 import type { Backend } from "./backend.js";
 import { cellHash, cellSize, INK, inkColourInto, KEY, lightness, ringAt, type FrameInput } from "./frame.js";
-import { CUT, INK_SX, INK_SY, bodyGlyph, edgeGlyph, inkCell, inkKey, inkPick, readInkCell } from "./ascii.js";
+import { CUT, INK_DITHERS, INK_SX, INK_SY, bodyGlyph, edgeGlyph, inkCell, inkDither, inkDitherIndex, inkKey, inkPick, readInkCell } from "./ascii.js";
 import { averageCells, cellShapes } from "./kernel.js";
 import { ctx2d, LS, offscreen, SS, type AnyCanvas, type Ctx2D, type Grid } from "./surface.js";
 
@@ -335,10 +335,10 @@ export class Canvas2DBackend implements Backend {
     for (let j = 0; j < rows; j++) {
       for (let i = 0; i < cols; i++) {
         readInkCell(px, stride, i * INK_SX, j * INK_SY, dark, cell);
-        const k = inkKey(cell.tone);
+        const k = inkKey(cell.tone) * INK_DITHERS + inkDitherIndex(i, j);
         let pick = this.inkPicks.get(k);
         if (pick === undefined) {
-          pick = inkPick(cell.tone, ink);
+          pick = inkPick(cell.tone, ink, inkDither(i, j));
           if (this.inkPicks.size > 1 << 16) this.inkPicks.clear();
           this.inkPicks.set(k, pick);
         }

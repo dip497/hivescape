@@ -56,8 +56,11 @@ still ones, as an ASCII shader over a still shot does.
 The characters carry the picture's light. Each cell is read as nine regions (three across, three
 down). A cell with an edge in it takes the line or bracket whose shape, measured out of the font, is
 nearest its own: `_` for a bright lower edge, `[` for a bright left side, `/` for a diagonal. Any
-other cell takes an even character as dense as it is bright, from ` .:;+*xo#0` (ordered by how much
-of the cell each covers), so flat light stays calm, and a dark cell none. Each character is drawn in
+other cell takes an even character as dense as it is bright, from ` .:;+*%#@` (ordered by how much
+of the cell each covers; no letters, which read as text), and a flat stretch between two of them
+mixes both in a fixed 4 x 4 dither, so it reads as one light and not as rows of one character; a
+dark cell takes none. Cells are 7 x 10 px, short enough that the characters of one row nearly meet
+the next's. Each character is drawn in
 the colour of its cell's bright side, averaged in linear light (never the brown mean of both sides
 of an edge), lifted toward full brightness, on a dim ground of the picture, with a glow.
 

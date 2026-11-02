@@ -454,7 +454,7 @@ export function defineMasterwork(m: Masterwork): Scene<State> {
     id: m.id,
     name: m.name,
     description: m.description,
-    style: (look) => ({ kind: "ink", cell: [7, 13], ambient: 1, glow: 0.4, edge: 0.12, ...m.style?.(look) }),
+    style: (look) => ({ kind: "ink", cell: [7, 10], ambient: 1, glow: 0.4, edge: 0.12, ...m.style?.(look) }),
 
     create(w) {
       const s: State = { built: null, t: 0, drops: [], strokes: [], strokesFor: "" };

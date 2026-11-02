@@ -169,13 +169,23 @@ export function inkKey(tone: ArrayLike<number>): number {
   return key;
 }
 
+/** A 4x4 ordered (Bayer) dither: each cell's threshold, fixed to the cell, so a flat stretch mixes
+ *  the two fills either side of its tone in a fine even pattern instead of one character in every
+ *  cell, which reads as rows of text. */
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5] as const;
+export const inkDither = (i: number, j: number): number => (BAYER4[(j & 3) * 4 + (i & 3)]! + 0.5) / 16;
+export const INK_DITHERS = 16;
+export const inkDitherIndex = (i: number, j: number): number => (j & 3) * 4 + (i & 3);
+export const BAYER4_LIST: readonly number[] = BAYER4;
+
 /**
  * Which character a cell read as `tone` takes: `[0]` none; `[1, edge index, strength]` an edge, its
  * strength (0..1) as bright as the cell's brightest region; `[2, fill index, 1]` a fill as dense as the
- * cell is bright on average.
+ * cell is bright on average: the nearer of the two either side of it, or, given the cell's `dither`
+ * threshold (inkDither), the denser one when the cell's tone is further than that between them.
  */
 const PATTERN = new Float32Array(INK_REGIONS);
-export function inkPick(tone: ArrayLike<number>, g: InkGlyphs): [0] | [1 | 2, number, number] {
+export function inkPick(tone: ArrayLike<number>, g: InkGlyphs, dither?: number): [0] | [1 | 2, number, number] {
   let mx = 0, mn = 1, mean = 0;
   for (let k = 0; k < INK_REGIONS; k++) { const t = tone[k]!; mx = Math.max(mx, t); mn = Math.min(mn, t); mean += t; }
   mean /= INK_REGIONS;
@@ -190,7 +200,16 @@ export function inkPick(tone: ArrayLike<number>, g: InkGlyphs): [0] | [1 | 2, nu
     }
     if (best >= 0) return [1, best, Math.sqrt(mx)];
   }
-  let best = 0, bd = Infinity;
-  for (let i = 0; i < g.levels.length; i++) { const d = Math.abs(g.levels[i]! - mean); if (d < bd) { bd = d; best = i; } }
+  let best = 0;
+  if (dither === undefined) {
+    let bd = Infinity;
+    for (let i = 0; i < g.levels.length; i++) { const d = Math.abs(g.levels[i]! - mean); if (d < bd) { bd = d; best = i; } }
+  } else {
+    // The densest fill at or below the tone, and the next: the cell takes the next when the tone is
+    // past its threshold of the way between them.
+    for (let i = 0; i < g.levels.length; i++) if (g.levels[i]! <= mean) best = i;
+    const next = best + 1;
+    if (next < g.levels.length && (mean - g.levels[best]!) / (g.levels[next]! - g.levels[best]!) > dither) best = next;
+  }
   return best === 0 ? [0] : [2, best, 1];
 }
