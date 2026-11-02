@@ -25,7 +25,7 @@ its ritual) and go further than the obvious version.
 | Things moving over a ground: water, a field, a board | top-down | `comb` |
 | A place with depth: a horizon, near and far, sky | side-on, layers with `parallax()` | `comb` |
 | A built world, terraces, objects with tops and sides | `isometric()` | `native` (cells lose the detail) |
-| Growing things, petals, birds: illustration | side-on | `native` (Garden of the day) |
+| Growing things, petals, birds: illustration | side-on | `native` |
 | Anything meant to read as character art; type, code, signal | any | `ascii` |
 | A painting or a photograph, alive | the picture's own, held still | `ink`, with `@hivescape/paintings` (`hivescape-living-picture`) |
 
@@ -87,7 +87,7 @@ a glance. Read `w.agents` each step and keep one creature per agent (add, remove
 - Test with `sim.agents(...)`, `sim.tiles(...)`, `sim.done(id)`: the visit, the honey, the time
   spent under tiles. Preview with `?agents=5&tiles=1` (`&turns=40` for a day's finished turns),
   shoot with `--agents 5 --turns 40`.
-- **Use the tiles themselves**: a creature can sit on a tile's top edge (Garden's birds) or dance
+- **Use the tiles themselves**: a creature can perch on a tile's top edge or dance
   beside it (The Hive's bees); the workspace is part of the scene.
 
 ## 6. Motion and interaction
